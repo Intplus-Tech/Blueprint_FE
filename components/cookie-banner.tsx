@@ -7,10 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { postJson } from '@/lib/api-client'
+import { saveCookiePreferences } from '@/lib/cookie-preferences'
 import type { CookieConsent } from '@/lib/schemas'
-
-const COOKIE_TEXT =
-  "We're not talking about the crunchy, tasty kind. These cookies help us keep our website safe, give you a better experience and show more"
 
 type Prefs = Omit<CookieConsent, 'essentials'> & { essentials: true }
 
@@ -31,6 +29,7 @@ export function CookieBanner({ onClose }: { onClose: () => void }) {
       : { essentials: true, marketing: false, externalMedia: false }
     const res = await postJson('/api/cookie-consent', payload)
     if (res.ok) {
+      saveCookiePreferences(payload)
       toast.success(accepted ? 'Preferences saved' : 'Only essentials kept')
     } else {
       toast.error('Could not save preferences')
@@ -42,25 +41,29 @@ export function CookieBanner({ onClose }: { onClose: () => void }) {
     <motion.div
       role="dialog"
       aria-label="Cookie consent"
-      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 40 }}
+      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className="pointer-events-auto w-full max-w-2xl rounded-t-xl border border-border bg-card p-6 text-card-foreground shadow-2xl sm:p-8"
+      className="pointer-events-auto w-[80%] max-w-4xl rounded-xl border border-border bg-card p-4 text-card-foreground shadow-2xl sm:p-6"
     >
       <h2 className="mb-4 text-lg font-bold text-brand">This website uses cookies</h2>
 
-      <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-start">
-        <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+        <div className="flex-1 space-y-3 text-sm leading-relaxed text-muted-foreground">
           <p>
-            {COOKIE_TEXT} relevant ads. We won&apos;t{' '}
+            We&apos;re not talking about the crunchy, tasty kind. These cookies help us keep our
+            website safe, give you a better experience and show more relevant ads. We won&apos;t{' '}
             <a href="#" className="text-brand underline">
               privacy policy
             </a>
           </p>
-          <p>{COOKIE_TEXT}</p>
+          <p>
+            We&apos;re not talking about the crunchy, tasty kind. These cookies help us keep our
+            website safe, give you a better experience and show more
+          </p>
         </div>
 
-        <div className="flex flex-col gap-3 sm:w-56">
+        <div className="flex shrink-0 flex-col gap-2 sm:w-44">
           <Button
             onClick={() => submit(true)}
             className="rounded-full bg-brand font-semibold text-white hover:bg-brand-hover"
@@ -77,7 +80,7 @@ export function CookieBanner({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-border pt-4 text-sm">
+      <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-border pt-4 text-sm">
         <div className="flex items-center gap-2">
           <Checkbox id={essentialsId} checked disabled aria-label="Essentials (required)" />
           <Label htmlFor={essentialsId} className="text-muted-foreground">

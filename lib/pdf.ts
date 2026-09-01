@@ -1,10 +1,8 @@
 /**
  * Client-only PDF.js loader + sessionStorage bridge.
  *
- * There's no backend in this demo, so the uploaded PDF is handed from the
- * landing page / dashboard upload modal to the document viewer via
- * sessionStorage (as a base64 data URL). Swap this for a real upload +
- * fetch-by-id flow once you have a backend.
+ * The uploaded PDF is handed from the landing page / dashboard upload modal to
+ * the document viewer via sessionStorage as a base64 data URL.
  */
 
 export const PDF_STORAGE_KEY = "bp_doc_pdf_data";
@@ -26,7 +24,7 @@ export function storePdfFile(file: File) {
       sessionStorage.setItem(PDF_STORAGE_KEY, dataUrl);
     });
   }
-  // Non-PDF upload: clear any previous PDF so we fall back to placeholder content.
+  // Non-PDF upload: clear any previous PDF so the viewer waits for a real file.
   sessionStorage.removeItem(PDF_STORAGE_KEY);
   return Promise.resolve();
 }

@@ -12,7 +12,13 @@ import {
 } from "@/components/dashboard-modals";
 import { UploadModal } from "@/components/upload-modal";
 import { InvoicesPanel } from "@/components/invoices-panel";
+import { NotificationWidget } from "@/components/notification-widget";
+import { NotificationCenter } from "@/components/notification-center";
 import { Search, Settings, Bell, LogOut, Filter, DownloadCloud, MoreVertical, Check, X as XIcon } from "lucide-react";
+import { useNotifications } from "@/lib/use-notifications";
+import { inviteCoSigner } from '@/lib/blueprint-api'
+import { createNotification } from '@/lib/notifications'
+import { exportDocuments } from "@/lib/export";
 import { cn } from "@/lib/utils";
 import { storePdfFile } from "@/lib/pdf";
 
@@ -29,27 +35,6 @@ type DocRow = {
   createdBy: string;
 };
 
-const INITIAL_DOCS: DocRow[] = [
-  {
-    id: "1", docId: "144532", name: "Sales Agreement.pdf", status: "Pending",
-    signers: [{ name: "Busayo", signed: false }, { name: "James", signed: true }, { name: "Gbemisola", signed: true }, { name: "Gabriel", signed: true }],
-    created: "21.03.2021", lastActivity: "14.07.2021",
-    createdBy: "Busayo",
-  },
-  {
-    id: "2", docId: "335845", name: "NDA_Template.pdf", status: "Signed",
-    signers: [{ name: "Busayo", signed: false }, { name: "James", signed: true }, { name: "Gbemisola", signed: true }, { name: "Gabriel", signed: true }],
-    created: "21.03.2021", lastActivity: "14.07.2021",
-    createdBy: "Busayo",
-  },
-  {
-    id: "3", docId: "720472", name: "Sales Agreement.pdf", status: "Expired",
-    signers: [{ name: "Busayo", signed: false }, { name: "James", signed: true }, { name: "Gbemisola", signed: true }, { name: "Gabriel", signed: true }],
-    created: "21.03.2021", lastActivity: "14.07.2021",
-    createdBy: "Busayo",
-  },
-];
-
 const STATUS_STYLES: Record<Status, string> = {
   Pending: "bg-amber-500",
   Signed: "bg-green-500",
@@ -61,13 +46,14 @@ type SortKey = "created" | "lastActivity" | null;
 
 export default function DashboardPage() {
   const [tab, setTab] = useState<Tab>("Documents");
-  const [docs, setDocs] = useState<DocRow[]>(INITIAL_DOCS);
-  const [selected, setSelected] = useState<Set<string>>(new Set(["1", "2"]));
+  const [docs, setDocs] = useState<DocRow[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("created");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [page, setPage] = useState(12);
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
 
   // Modals state
   const [addSignerDocId, setAddSignerDocId] = useState<string | null>(null);
@@ -76,6 +62,8 @@ export default function DashboardPage() {
   const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [invoicesEmpty, setInvoicesEmpty] = useState(false);
+
+  const { unreadCount } = useNotifications();
 
   const filteredDocs = useMemo(() => {
     if (!search.trim()) return docs;
@@ -129,7 +117,7 @@ export default function DashboardPage() {
         signers: [{ name: "You", signed: false }],
         created: new Date().toLocaleDateString("en-GB").replaceAll("/", "."),
         lastActivity: new Date().toLocaleDateString("en-GB").replaceAll("/", "."),
-        createdBy: "Busayo",
+        createdBy: "Current user",
       },
       ...prev,
     ]);
@@ -152,13 +140,41 @@ export default function DashboardPage() {
   const selectedDoc = docs.find((d) => d.id === detailsDocId) ?? null;
   const resendDoc = docs.find((d) => d.id === resendDocId) ?? null;
 
+  async function handleResendByDetailId(id: string) {
+    // id format: `${doc.id}:${index}` produced by toDetailSigners
+    if (id === 'you') return;
+    const parts = id.split(":");
+    if (parts.length < 2) return console.error('Invalid signer id:', id);
+    const docId = parts[0];
+    const idx = Number(parts[1]);
+    const doc = docs.find((d) => d.id === docId);
+    if (!doc) return console.error('Document not found for signer id:', id);
+    const signer = doc.signers[idx];
+    if (!signer) return console.error('Signer not found for id:', id);
+
+    const nameParts = signer.name.split(/\s+/);
+    const firstName = nameParts[0] ?? '';
+    const lastName = nameParts.slice(1).join(' ') ?? '';
+    const email = `${signer.name.toLowerCase().replace(/\s+/g, '')}@greymail.com`;
+
+    try {
+      const res = await inviteCoSigner({ firstName, lastName, email, documentId: doc.docId });
+      if (res.ok) {
+        createNotification.cosign('Invite sent', `Resent invite to ${signer.name}`);
+      } else {
+        createNotification.system('Invite failed', `Unable to resend invite to ${signer.name}`);
+      }
+    } catch (err) {
+      console.error('Resend invite error', err);
+      createNotification.system('Invite failed', `Unable to resend invite to ${signer.name}`);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       <div className="flex items-center gap-2 bg-white px-3 py-1.5 shadow-sm sm:gap-3 sm:px-6">
-        <div className="shrink-0 scale-[0.6] origin-left">
-          <Logo />
-        </div>
-        <div className="relative min-w-0 max-w-md flex-1">
+        <Logo variant="horizontal" size="sm" />
+        <div className="relative mx-auto ml-6 w-full max-w-xl flex-1 sm:ml-12">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
@@ -169,22 +185,27 @@ export default function DashboardPage() {
         </div>
         <div className="flex shrink-0 flex-1 items-center justify-end gap-2 text-gray-400 sm:gap-2.5">
           <button type="button" className="shrink-0 hover:text-gray-600" aria-label="Settings"><Settings className="h-4 w-4" /></button>
-          <button type="button" className="relative shrink-0 hover:text-gray-600" aria-label="Notifications">
+          <button type="button" onClick={() => setNotificationCenterOpen(!notificationCenterOpen)} className="relative shrink-0 hover:text-gray-600" aria-label="Notifications">
             <Bell className="h-4 w-4" />
-            <span className="absolute -right-1.5 -top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[9px] font-medium text-white">3</span>
+            {unreadCount > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[9px] font-medium text-white">{unreadCount}</span>
+            )}
           </button>
           <Link href="/login" className="shrink-0 hover:text-gray-600" aria-label="Log out"><LogOut className="h-4 w-4" /></Link>
         </div>
       </div>
 
       <div className="px-4 pt-4 sm:px-6">
-        <div className="flex items-center gap-1 rounded-lg bg-white p-1 shadow-sm w-fit">
+        <div className="flex w-fit items-center gap-1 rounded-lg bg-[#edf1f5] p-1 shadow-sm">
           {(["Documents", "Invoices", "Templates"] as Tab[]).map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => setTab(t)}
-              className={cn("rounded-md px-3 py-1 text-xs font-medium transition-colors", tab === t ? "bg-brand-50 text-brand-700" : "text-gray-500 hover:text-gray-700")}
+              className={cn(
+                "rounded-md px-4 py-1.5 text-xs font-medium transition-colors",
+                tab === t ? "bg-[#dfeefb] text-[#1f3d5f] shadow-sm" : "text-gray-500 hover:text-gray-700"
+              )}
             >
               {t}
             </button>
@@ -212,7 +233,23 @@ export default function DashboardPage() {
 
             <div className="mt-2 flex items-center justify-end gap-3 text-xs text-gray-500">
               <button type="button" className="flex items-center gap-1 hover:text-gray-700"><Filter className="h-3.5 w-3.5" />Filter</button>
-              <button type="button" className="flex items-center gap-1 hover:text-gray-700"><DownloadCloud className="h-3.5 w-3.5" />Export</button>
+              <div className="relative group">
+                <button type="button" className="flex items-center gap-1 hover:text-gray-700"><DownloadCloud className="h-3.5 w-3.5" />Export</button>
+                <div className="absolute right-0 top-full mt-1 hidden group-hover:block z-10 bg-white border border-gray-200 rounded-md shadow-lg py-1">
+                  <button
+                    onClick={() => exportDocuments(filteredDocs, 'csv')}
+                    className="block w-full text-left px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    Export as CSV
+                  </button>
+                  <button
+                    onClick={() => exportDocuments(filteredDocs, 'xlsx')}
+                    className="block w-full text-left px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    Export as XLSX
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="mt-3 overflow-x-auto">
@@ -315,7 +352,7 @@ export default function DashboardPage() {
             setShowAddForm(false);
           }}
           onAddSigner={(signer) => handleAddSignerFromModal(selectedDoc.id, signer)}
-          onResend={(id) => console.log("Resend invite to:", id)}
+          onResend={handleResendByDetailId}
         />
       )}
 
@@ -327,7 +364,7 @@ export default function DashboardPage() {
           onToggleAddForm={setShowAddForm}
           onClose={() => { setResendDocId(null); setShowAddForm(false); }}
           onAddSigner={(signer) => handleAddSignerFromModal(resendDoc.id, signer)}
-          onResend={(id) => console.log("Resend invite to:", id)}
+          onResend={handleResendByDetailId}
         />
       )}
 
@@ -336,6 +373,17 @@ export default function DashboardPage() {
         <DeleteConfirmModal
           onCancel={() => setDeleteDocId(null)}
           onConfirm={handleConfirmDelete}
+        />
+      )}
+
+      {/* Notification Widget */}
+      <NotificationWidget position="top-right" maxVisible={3} />
+
+      {/* Notification Center Panel */}
+      {notificationCenterOpen && (
+        <NotificationCenter
+          isOpen={true}
+          onClose={() => setNotificationCenterOpen(false)}
         />
       )}
     </div>

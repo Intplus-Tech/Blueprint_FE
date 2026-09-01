@@ -1,8 +1,109 @@
 "use client";
 
-import { X, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { X, Pencil, Save, Mail, Download, Phone, AtSign } from "lucide-react";
 import { invoiceTotal, type Invoice } from "@/lib/invoice-types";
+import { saveInvoice } from "@/lib/blueprint-api";
+import { exportData } from "@/lib/export";
+
+function PreviewActionButton({
+  icon: Icon,
+  label,
+  onClick,
+  primary = false,
+}: {
+  icon: typeof Pencil;
+  label: string;
+  onClick: () => void;
+  primary?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-all",
+        primary
+          ? "bg-[#0ea5e9] text-white hover:bg-[#0a9ad9]"
+          : "bg-[#0ea5e9] text-white hover:bg-[#0a9ad9]",
+      ].join(" ")}
+    >
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-white">
+        <Icon className="h-3.5 w-3.5" />
+      </span>
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function CompanyLogo() {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex items-center">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full border-[2.5px] border-[#12b3d7]" />
+        <span className="-ml-3.5 flex h-8 w-8 items-center justify-center rounded-full border-[2.5px] border-[#12b3d7]" />
+      </div>
+      <div className="-ml-1.5 flex items-baseline gap-2">
+        <span className="text-[20px] font-black tracking-[-0.02em] text-[#1f2937]">Blueprint</span>
+        <span className="text-[20px] font-light text-[#c7ced8]">|</span>
+        <span className="text-[20px] font-light text-[#4b5563]">Invoice</span>
+      </div>
+    </div>
+  );
+}
+
+function ContactBlock({
+  align,
+  name,
+  address,
+  email,
+  phone,
+}: {
+  align: "left" | "right";
+  name?: string;
+  address?: string;
+  email?: string;
+  phone?: string;
+}) {
+  const isRight = align === "right";
+  return (
+    <div className={isRight ? "text-right" : "text-left"}>
+      {name && <p className="text-[13px] font-semibold text-gray-800">{name}</p>}
+      {address && <p className="mt-0.5 whitespace-pre-line leading-5 text-gray-500">{address}</p>}
+      {(email || phone) && (
+        <div className="mt-3 space-y-0.5">
+          {email && (
+            <p
+              className={[
+                "flex items-center gap-1.5 text-gray-500",
+                isRight ? "justify-end" : "justify-start",
+              ].join(" ")}
+            >
+              {!isRight && <AtSign className="h-3 w-3 text-gray-400" />}
+              <span>{email}</span>
+              {isRight && <AtSign className="h-3 w-3 text-gray-400" />}
+            </p>
+          )}
+          {phone && (
+            <p
+              className={[
+                "flex items-center gap-1.5 text-gray-500",
+                isRight ? "justify-end" : "justify-start",
+              ].join(" ")}
+            >
+              {!isRight && <Phone className="h-3 w-3 text-gray-400" />}
+              <span>{phone}</span>
+              {isRight && <Phone className="h-3 w-3 text-gray-400" />}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatAmount(n: number) {
+  return `${n.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD`;
+}
 
 export function InvoicePreviewModal({
   invoice,
@@ -13,85 +114,198 @@ export function InvoicePreviewModal({
   onClose: () => void;
   onUpdate: () => void;
 }) {
+  const subtotal = invoice.items.reduce((sum, item) => sum + item.qty * item.rate, 0);
+  const discountAmount = subtotal * (invoice.discount / 100);
+  const taxAmount = subtotal * (invoice.tax / 100);
   const total = invoiceTotal(invoice);
 
+  async function handleSaveForLater() {
+    try {
+      await saveInvoice(invoice as unknown as Record<string, unknown>);
+      onUpdate?.();
+      console.log("Invoice saved")
+    } catch (err) {
+      console.error("Failed to save invoice:", err)
+    }
+  }
+
+  async function handleDownload() {
+    try {
+      const rows = invoice.items.map((it) => ({
+        description: it.description,
+        hours: it.qty,
+        units: it.qty,
+        amount: (it.qty * it.rate).toFixed(2),
+      }));
+
+      await exportData({
+        data: rows,
+        format: 'csv',
+        filename: `invoice-${invoice.invoiceNumber ?? Date.now()}`,
+        headers: ['description', 'hours', 'units', 'amount'],
+      });
+    } catch (err) {
+      console.error('Failed to download invoice:', err)
+    }
+  }
+
+  function handleSendViaEmail() {
+    try {
+      const subject = encodeURIComponent(`Invoice ${invoice.invoiceNumber ?? ''}`);
+      const bodyLines = [
+        `Total: ${formatAmount(total)}`,
+        '',
+        'Items:',
+        ...invoice.items.map((it) => `${it.description} — ${it.qty} x ${it.rate} = ${formatAmount(it.qty * it.rate)}`),
+      ];
+      const body = encodeURIComponent(bodyLines.join('\n'));
+      const to = invoice.email ?? '';
+      window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+    } catch (err) {
+      console.error('Failed to open mail client:', err)
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
-      <div className="relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-8 shadow-2xl">
-        <div className="absolute right-4 top-4 flex items-center gap-2">
-          <Button type="button" size="sm" onClick={onUpdate}>Update Invoice</Button>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Close">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-[2px] px-4 py-10"
+      onClick={onClose}
+    >
+      <div
+        className="relative flex w-full max-w-[1000px] items-start gap-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="relative mx-auto max-h-[88vh] w-full max-w-[720px] overflow-y-auto rounded-[10px] bg-white p-8 shadow-[0_25px_60px_rgba(15,23,42,0.35)] ring-1 ring-black/5">
+          <div className="flex items-start justify-between gap-4">
+            <CompanyLogo />
+            <div className="mt-1 shrink-0 text-right">
+              <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-gray-400">
+                Invoice No.
+              </div>
+              <div className="text-[12px] font-bold text-gray-800">
+                {invoice.invoiceNumber ? `#${invoice.invoiceNumber}` : ""}
+              </div>
+              <div className="mt-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-gray-400">
+                Invoice Date
+              </div>
+              <div className="text-[11px] font-medium text-gray-600">{invoice.issueDate}</div>
+            </div>
+          </div>
+
+          <div className="mt-7 grid grid-cols-2 gap-10 text-[11px]">
+            <div>
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">
+                Recipient
+              </p>
+              <ContactBlock
+                align="left"
+                name={invoice.contactName}
+                address={invoice.billTo}
+                email={invoice.email}
+                phone={invoice.phone}
+              />
+            </div>
+
+            <div className="pt-[22px]">
+              <ContactBlock
+                align="right"
+                name={invoice.contactName}
+                address={invoice.billTo}
+                email={invoice.email}
+                phone={invoice.phone}
+              />
+            </div>
+          </div>
+
+          <table className="mt-7 w-full text-left text-[11px]">
+            <thead>
+              <tr className="border-b-2 border-[#12b3d7]/25 text-[10px] font-bold uppercase tracking-[0.12em] text-[#12b3d7]">
+                <th className="px-2 py-2 font-bold">Description</th>
+                <th className="px-2 py-2 text-right font-bold">Hours</th>
+                <th className="px-2 py-2 text-right font-bold">Units</th>
+                <th className="px-2 py-2 text-right font-bold">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoice.items.map((item) => (
+                <tr key={item.id} className="border-b border-[#eef3f8] text-gray-700">
+                  <td className="px-2 py-2.5">{item.description}</td>
+                  <td className="px-2 py-2.5 text-right">{item.qty}</td>
+                  <td className="px-2 py-2.5 text-right">{item.qty}</td>
+                  <td className="px-2 py-2.5 text-right font-medium text-gray-800">
+                    {formatAmount(item.qty * item.rate)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="mt-4 flex justify-end">
+            <div className="w-[240px] space-y-1.5 text-[11px]">
+              <div className="flex items-center justify-between text-gray-500">
+                <span>Subtotal</span>
+                <span className="text-gray-700">{formatAmount(subtotal)}</span>
+              </div>
+              <div className="flex items-center justify-between font-semibold text-[#12b3d7]">
+                <span className="uppercase tracking-[0.04em]">Discount {invoice.discount}%</span>
+                <span>- {formatAmount(discountAmount)}</span>
+              </div>
+              <div className="flex items-center justify-between text-gray-500">
+                <span>Tax {invoice.tax}%</span>
+                <span className="text-gray-700">+ {formatAmount(taxAmount)}</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-[#edf2f7] pt-2">
+                <span className="text-[12px] font-bold uppercase tracking-[0.04em] text-gray-900">
+                  Total
+                </span>
+                <span className="text-[15px] font-bold text-[#12b3d7]">{formatAmount(total)}</span>
+              </div>
+            </div>
+          </div>
+
+          {invoice.email && (
+            <div className="mt-6">
+              <div className="rounded-t-md bg-[#12b3d7] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white">
+                Account Data
+              </div>
+              <div className="rounded-b-md border border-t-0 border-[#e7edf5] px-3 py-3 text-[11px] leading-5 text-gray-600">
+                <p>Transfer the amount to the business account below. Please include invoice number on your check.</p>
+                <p className="mt-1">{invoice.email}</p>
+              </div>
+            </div>
+          )}
+
+          {invoice.terms && (
+            <div className="mt-6 border-t border-[#edf2f7] pt-4 text-[11px] text-gray-500">
+              <p className="font-bold uppercase tracking-[0.12em] text-gray-400">Notes</p>
+              <p className="mt-2 whitespace-pre-line leading-5">{invoice.terms}</p>
+            </div>
+          )}
+
+          <div className="mt-8 flex items-center justify-between border-t border-[#edf2f7] pt-3 text-[9px] text-gray-400">
+            <div className="flex items-center gap-2">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full border border-[#12b3d7]" />
+              {invoice.contactName && (
+                <span className="font-semibold uppercase tracking-[0.1em]">{invoice.contactName}</span>
+              )}
+            </div>
+            {invoice.invoiceNumber && <span>Invoice #{invoice.invoiceNumber}</span>}
+          </div>
+        </div>
+
+        <div className="flex w-[190px] flex-col gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-auto mb-1 flex h-8 w-8 items-center justify-center rounded-md bg-transparent text-gray-500 transition hover:text-gray-700"
+            aria-label="Close"
+          >
             <X className="h-4 w-4" />
           </button>
-        </div>
-
-        <div className="flex items-start justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">Invoice</h2>
-          <div className="text-right text-xs text-gray-400">
-            <p>Invoice No.</p>
-            <p className="font-semibold text-gray-700">#{invoice.invoiceNumber}</p>
-          </div>
-        </div>
-
-        <div className="mt-6 flex items-start justify-between text-sm">
-          <div>
-            <p className="text-xs font-semibold text-gray-400">Billed To:</p>
-            <p className="mt-1 font-semibold text-gray-800">{invoice.contactName || "Client Name"}</p>
-            <p className="whitespace-pre-line text-xs text-gray-400">{invoice.billTo || "Address | Contact Info"}</p>
-          </div>
-          <div className="text-right text-xs text-gray-400">
-            <p>Issued On</p>
-            <p className="mb-2 font-medium text-gray-600">{invoice.issueDate}</p>
-            <p>Payment Due</p>
-            <p className="font-medium text-gray-600">{invoice.dueDate}</p>
-          </div>
-        </div>
-
-        <table className="mt-6 w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100 text-left text-xs font-semibold text-gray-400">
-              <th className="pb-2">Services</th>
-              <th className="pb-2 text-right">Qty</th>
-              <th className="pb-2 text-right">Price</th>
-              <th className="pb-2 text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {invoice.items.map((item) => (
-              <tr key={item.id} className="border-b border-gray-50">
-                <td className="py-2 text-gray-700">{item.description || "Invoice item"}</td>
-                <td className="py-2 text-right text-gray-500">{item.qty}</td>
-                <td className="py-2 text-right text-gray-500">${item.rate.toLocaleString()}</td>
-                <td className="py-2 text-right text-gray-700">${(item.qty * item.rate).toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div className="mt-4 flex justify-end">
-          <div className="w-48 rounded-md bg-brand-50 px-4 py-3 text-right">
-            <p className="text-xs font-medium text-brand-500">Total (USD)</p>
-            <p className="text-xl font-bold text-brand-700">${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-          </div>
-        </div>
-
-        <div className="mt-8 grid grid-cols-1 gap-4 border-t border-gray-100 pt-4 text-xs text-gray-500 sm:grid-cols-3">
-          <div>
-            <div className="mb-1 flex h-6 w-6 items-center justify-center rounded bg-brand-100 text-brand-600">
-              <Sparkles className="h-3.5 w-3.5" />
-            </div>
-            <p className="font-semibold text-gray-700">Company Name LLC</p>
-            <p>Address, City</p>
-            <p>email@company.com</p>
-          </div>
-          <div>
-            <p className="mb-1 font-semibold text-gray-700">Payment Instructions</p>
-            <p>Transfer to the account below. Please include the invoice number as reference.</p>
-          </div>
-          <div>
-            <p className="mb-1 font-semibold text-gray-700">Additional Notes</p>
-            <p className="whitespace-pre-line">{invoice.terms}</p>
-          </div>
+          <PreviewActionButton icon={Pencil} label="Back to Edit" onClick={onUpdate} primary />
+          <PreviewActionButton icon={Save} label="Save for Later" onClick={handleSaveForLater} />
+          <PreviewActionButton icon={Mail} label="Send via Email" onClick={handleSendViaEmail} />
+          <PreviewActionButton icon={Download} label="Download" onClick={handleDownload} />
         </div>
       </div>
     </div>

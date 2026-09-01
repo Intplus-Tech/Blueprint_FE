@@ -7,7 +7,25 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { postJson } from '@/lib/api-client'
 
-const USER = { name: 'Disha Tinu', email: 'Disha.strange@gmail.com' }
+function getGoogleSessionUser() {
+  if (typeof window === 'undefined') {
+    return { name: 'Google User', email: 'google-user@example.com' }
+  }
+
+  try {
+    const saved = window.localStorage.getItem('bp-google-user')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      if (parsed?.name && parsed?.email) {
+        return { name: parsed.name, email: parsed.email }
+      }
+    }
+  } catch {
+    // ignore invalid cached user data
+  }
+
+  return { name: 'Google User', email: 'google-user@example.com' }
+}
 
 function GoogleG() {
   return (
@@ -25,12 +43,41 @@ export function GoogleOneTap({ onClose }: { onClose: () => void }) {
   const router = useRouter()
 
   async function signIn() {
-    const res = await postJson('/api/auth/google', USER)
-    if (res.ok) {
-      toast.success(`Signed in as ${USER.name}`)
-      onClose()
-      router.push('/dashboard')
-    } else {
+    const user = getGoogleSessionUser()
+
+    try {
+      const res = await fetch('/api/auth/google/url')
+      if (res.ok) {
+        const payload = await res.json().catch(() => null)
+        const data = payload?.data ?? payload
+        const url = data?.authUrl ?? data?.url ?? data?.redirectUrl
+
+        if (typeof url === 'string' && url.startsWith('http')) {
+          localStorage.setItem('bp-google-user', JSON.stringify(user))
+          window.location.href = url
+          return
+        }
+
+        if (typeof url === 'string' && url.startsWith('/')) {
+          localStorage.setItem('bp-google-user', JSON.stringify(user))
+          window.location.href = url
+          return
+        }
+      }
+
+      const fallback = await postJson('/api/auth/google', user)
+      if (fallback.ok) {
+        localStorage.setItem('bp-google-user', JSON.stringify(user))
+        toast.success(`Signed in as ${user.name}`)
+        onClose()
+        router.push('/dashboard')
+      } else {
+        toast.error('Sign-in failed')
+        onClose()
+      }
+    } catch (err) {
+      console.error('Google One Tap sign-in error', err)
+      localStorage.setItem('bp-google-user', JSON.stringify(user))
       toast.error('Sign-in failed')
       onClose()
     }
@@ -48,7 +95,7 @@ export function GoogleOneTap({ onClose }: { onClose: () => void }) {
       <div className="flex items-center gap-3 px-4 py-3">
         <GoogleG />
         <p className="flex-1 text-sm text-muted-foreground">
-          Sign in to My App with Google One Tap
+          Sign in to Blueprintdoc with Google One Tap
         </p>
         <Button
           variant="ghost"
@@ -63,11 +110,11 @@ export function GoogleOneTap({ onClose }: { onClose: () => void }) {
 
       <div className="flex items-center gap-3 px-4 pb-3">
         <span className="flex size-10 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
-          DT
+          GU
         </span>
         <div className="text-sm">
-          <p className="font-semibold text-foreground">{USER.name}</p>
-          <p className="text-muted-foreground">{USER.email}</p>
+          <p className="font-semibold text-foreground">{getGoogleSessionUser().name}</p>
+          <p className="text-muted-foreground">{getGoogleSessionUser().email}</p>
         </div>
       </div>
 
@@ -76,17 +123,13 @@ export function GoogleOneTap({ onClose }: { onClose: () => void }) {
           onClick={signIn}
           className="w-full bg-brand font-semibold text-white hover:bg-brand-hover"
         >
-          Continue as Disha
+          Continue with Google
         </Button>
       </div>
 
       <p className="px-4 pb-4 text-xs leading-relaxed text-muted-foreground">
-        To create your account, Google will share your name, email address, and profile with
-        picture with{' '}
-        <a href="#" className="text-brand">
-          Santas Helper
-        </a>
-        . See Santas Helper&apos;s{' '}
+        To create your account, Google will share your name, email address, and profile picture with
+        Blueprintdoc. See Blueprintdoc&apos;s{' '}
         <a href="#" className="text-brand">
           privacy policy
         </a>{' '}

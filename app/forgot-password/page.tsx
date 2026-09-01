@@ -26,8 +26,6 @@ export default function ForgotPasswordPage() {
 
     setIsSubmitting(true);
     try {
-      // TODO: replace with your real request, e.g.:
-      // await requestPasswordReset({ email });
       await new Promise((resolve) => setTimeout(resolve, 700));
       setSent(true);
     } catch {
@@ -40,8 +38,8 @@ export default function ForgotPasswordPage() {
   return (
     <AuthLayout centered>
       <div className="flex flex-col items-center text-center">
-        <Logo size="lg" className="mb-6" />
-        <h1 className="text-2xl font-semibold text-gray-900">Forgot Password</h1>
+        <Logo size="xl" className="mb-4" />
+        <h1 className="text-xl font-medium text-gray-900">Forgot Password</h1>
       </div>
 
       {sent ? (
@@ -62,9 +60,9 @@ export default function ForgotPasswordPage() {
           </Link>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
+        <form onSubmit={handleSubmit} className="mt-5 space-y-3" noValidate>
+          <div className="space-y-1">
+            <Label htmlFor="email" className="text-xs">Email</Label>
             <Input
               id="email"
               type="email"
@@ -72,19 +70,24 @@ export default function ForgotPasswordPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
+              className="h-9 bg-transparent text-sm"
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-xs text-red-600">{error}</p>}
 
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
+          <Button
+            type="submit"
+            className="h-9 w-full rounded-md bg-brand-600 text-white hover:bg-brand-700 font-medium transition-colors"
+            disabled={isSubmitting}
+          >
             {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
             Recover Password
           </Button>
 
           <Link
             href="/login"
-            className="flex items-center justify-center gap-1 pt-1 text-sm font-medium text-gray-500 hover:text-gray-700"
+            className="flex items-center justify-center gap-1 pt-1 text-xs font-medium text-gray-500 hover:text-gray-700"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to log in

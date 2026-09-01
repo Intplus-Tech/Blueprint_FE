@@ -75,9 +75,8 @@ export default function SignupPage() {
   return (
     <AuthLayout>
       <div className="flex flex-col items-center text-center">
-        <Logo size="lg" className="mb-6" />
-        <h1 className="text-2xl font-semibold text-gray-900">Sign Up</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-3xl text-gray-900">Sign Up</h1>
+        <p className="mt-1 text-xs font-bold text-gray-500">
           Create your account to get started.
         </p>
       </div>
@@ -85,7 +84,7 @@ export default function SignupPage() {
       <Button
         type="button"
         variant="outline"
-        className="mt-6 w-full"
+        className="mt-4 w-full border-gray-300 bg-transparent text-gray-900 hover:bg-gray-50"
         onClick={handleGoogleSignup}
       >
         <GoogleIcon className="h-4 w-4" />
@@ -126,7 +125,7 @@ export default function SignupPage() {
         <Label htmlFor="industry" className="text-gray-900">What do you do?</Label>
         <Select 
           value={industry} onValueChange={setIndustry}>
-        <SelectTrigger id="industry" className="bg-white text-gray-900 border-gray-300">
+        <SelectTrigger id="industry" className="h-9 w-full rounded-md border-gray-300 bg-transparent text-sm text-gray-900">
         <SelectValue placeholder="Select your industry" />
         </SelectTrigger>
         <SelectContent>
@@ -165,7 +164,11 @@ export default function SignupPage() {
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <Button type="submit" className="w-full bg-[#006FEE] text-white hover:bg-[#005bc4] font-medium transition-colors" disabled={isSubmitting}>
+        <Button
+          type="submit"
+          className="h-9 w-full rounded-md bg-[#006FEE] text-white hover:bg-[#005bc4] font-medium transition-colors"
+          disabled={isSubmitting}
+        >
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
           Create Account
         </Button>

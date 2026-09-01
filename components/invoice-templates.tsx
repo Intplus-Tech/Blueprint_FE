@@ -15,13 +15,13 @@ export type Template = {
 
 export const TEMPLATES: Template[] = [
   { id: "minimal", name: "Minimal", swatch: "bg-white border border-gray-200", textClass: "text-gray-800", starterItem: { id: "t1", description: "Consulting hours", qty: 1, rate: 500 } },
-  { id: "mockup", name: "Mockup Invoice", swatch: "bg-gray-900", textClass: "text-white", starterItem: { id: "t2", description: "Screeding Machine (5 Days)", qty: 3, rate: 300000 } },
-  { id: "cream", name: "Classic", swatch: "bg-amber-50 border border-amber-100", textClass: "text-amber-900", starterItem: { id: "t3", description: "Design services", qty: 1, rate: 1200 } },
-  { id: "grid", name: "Grid", swatch: "bg-white border-2 border-gray-800", textClass: "text-gray-900", starterItem: { id: "t4", description: "Line item", qty: 2, rate: 250 } },
-  { id: "badge", name: "Badge", swatch: "bg-stone-50 border border-stone-200", textClass: "text-stone-800", starterItem: { id: "t5", description: "Service fee", qty: 1, rate: 800 } },
-  { id: "qr", name: "QR Code", swatch: "bg-black", textClass: "text-white", starterItem: { id: "t6", description: "Digital product", qty: 1, rate: 99 } },
-  { id: "project", name: "Project XYZ", swatch: "bg-indigo-900", textClass: "text-white", starterItem: { id: "t7", description: "Project milestone", qty: 1, rate: 5000 } },
-  { id: "panda", name: "Panda Inc", swatch: "bg-orange-50 border border-orange-100", textClass: "text-orange-900", starterItem: { id: "t8", description: "Retainer", qty: 1, rate: 4900 } },
+  { id: "classic", name: "Classic", swatch: "bg-amber-50 border border-amber-100", textClass: "text-amber-900", starterItem: { id: "t2", description: "Design services", qty: 1, rate: 1200 } },
+  { id: "grid", name: "Grid", swatch: "bg-white border-2 border-gray-800", textClass: "text-gray-900", starterItem: { id: "t3", description: "Line item", qty: 2, rate: 250 } },
+  { id: "badge", name: "Badge", swatch: "bg-stone-50 border border-stone-200", textClass: "text-stone-800", starterItem: { id: "t4", description: "Service fee", qty: 1, rate: 800 } },
+  { id: "qr", name: "QR Code", swatch: "bg-black", textClass: "text-white", starterItem: { id: "t5", description: "Digital product", qty: 1, rate: 99 } },
+  { id: "project", name: "Project", swatch: "bg-indigo-900", textClass: "text-white", starterItem: { id: "t6", description: "Project milestone", qty: 1, rate: 5000 } },
+  { id: "studio", name: "Studio", swatch: "bg-orange-50 border border-orange-100", textClass: "text-orange-900", starterItem: { id: "t7", description: "Retainer", qty: 1, rate: 4900 } },
+  { id: "modern", name: "Modern", swatch: "bg-slate-900", textClass: "text-white", starterItem: { id: "t8", description: "Premium package", qty: 1, rate: 2500 } },
 ];
 
 function TemplateThumb({ template, className }: { template: Template; className?: string }) {
@@ -43,6 +43,8 @@ function TemplateThumb({ template, className }: { template: Template; className?
     </div>
   );
 }
+
+export { TemplateThumb };
 
 export function TemplateGallery({
   onPreview,
@@ -74,6 +76,73 @@ export function TemplateGallery({
   );
 }
 
+// ---- Full-size preview ----------------------------------------------------
+// Generic invoice preview without seeded customer or business data.
+
+function TemplateFullPreview({ template }: { template: Template }) {
+  const item = template.starterItem;
+  const amount = item.qty * item.rate;
+  const subtotal = amount;
+
+  return (
+    <div className="p-8">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-600">{template.name}</p>
+          <h2 className="text-2xl font-bold text-gray-900">Invoice</h2>
+        </div>
+        <div className="text-right text-[11px] text-gray-400">
+          <p>Invoice No.</p>
+          <p className="font-semibold text-gray-700">INV-001</p>
+          <p className="mt-1">Issue Date</p>
+          <p className="font-semibold text-gray-700">{new Date().toLocaleDateString()}</p>
+        </div>
+      </div>
+
+      <div className="mt-6 grid grid-cols-2 gap-6 text-[11px]">
+        <div>
+          <p className="font-semibold uppercase tracking-wide text-gray-400">Bill To</p>
+          <p className="mt-1 font-semibold text-gray-800">Client</p>
+          <p className="text-gray-400">Customer details will be filled in later</p>
+        </div>
+        <div className="text-right">
+          <p className="font-semibold uppercase tracking-wide text-gray-400">From</p>
+          <p className="mt-1 font-semibold text-gray-800">Business Name</p>
+          <p className="text-gray-400">Your contact info here</p>
+        </div>
+      </div>
+
+      <table className="mt-6 w-full text-xs">
+        <thead>
+          <tr className="border-b border-gray-100 text-left font-semibold text-brand-500">
+            <th className="pb-2">Description</th>
+            <th className="pb-2 text-right">Qty</th>
+            <th className="pb-2 text-right">Rate</th>
+            <th className="pb-2 text-right">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="border-b border-gray-50">
+            <td className="py-2 text-gray-700">{item.description}</td>
+            <td className="py-2 text-right text-gray-500">{item.qty}</td>
+            <td className="py-2 text-right text-gray-500">${item.rate.toLocaleString()}</td>
+            <td className="py-2 text-right text-gray-700">${amount.toLocaleString()}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div className="mt-3 space-y-1 border-t border-gray-100 pt-3 text-right text-[11px]">
+        <p className="text-gray-400">
+          Subtotal <span className="ml-4 inline-block w-24 font-medium text-gray-600">${subtotal.toLocaleString()}</span>
+        </p>
+        <p className="text-sm font-bold text-gray-900">
+          Total <span className="ml-4 inline-block w-24 text-brand-700">${subtotal.toLocaleString()}</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function TemplatePreviewModal({
   template,
   onClose,
@@ -85,15 +154,14 @@ export function TemplatePreviewModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
-      <div className="relative max-h-[92vh] w-full max-w-md overflow-y-auto rounded-lg bg-white shadow-2xl">
+      <div className="relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white shadow-2xl">
         <div className="absolute right-4 top-4 flex items-center gap-2">
           <Button type="button" size="sm" onClick={onUseTemplate}>Use the Template</Button>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Close">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <TemplateThumb template={template} className="min-h-[420px] rounded-b-none rounded-t-lg p-6" />
-        <div className="p-4 text-center text-sm font-medium text-gray-600">{template.name}</div>
+        <TemplateFullPreview template={template} />
       </div>
     </div>
   );

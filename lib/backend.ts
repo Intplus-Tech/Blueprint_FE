@@ -1,33 +1,40 @@
 import 'server-only'
 
-/**
- * Forwards a validated payload to the existing backend service.
- *
- * The backend base URL is read from BACKEND_API_URL (server-only). When it is
- * not configured, we no-op gracefully and echo the payload back so the UI
- * stays functional in preview/local environments without a live backend.
- */
+export type BackendRequestOptions = {
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  headers?: Record<string, string>
+  query?: Record<string, string | number | boolean | undefined>
+  body?: unknown
+}
+
 export async function forwardToBackend<T>(
   path: string,
-  payload: T,
+  payload?: T,
+  options: BackendRequestOptions = {},
 ): Promise<{ ok: boolean; forwarded: boolean; data: unknown }> {
-  const baseUrl = process.env.BACKEND_API_URL
+  const baseUrl = process.env.BACKEND_API_URL ?? 'http://localhost:5000/api/v1'
 
-  if (!baseUrl) {
-    // No backend configured — accept and echo so the flow completes.
-    return { ok: true, forwarded: false, data: payload }
-  }
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  const url = new URL(`${baseUrl.replace(/\/$/, '')}${normalizedPath}`)
 
-  const res = await fetch(`${baseUrl.replace(/\/$/, '')}${path}`, {
-    method: 'POST',
+  Object.entries(options.query ?? {}).forEach(([key, value]) => {
+    if (value !== undefined) url.searchParams.set(key, String(value))
+  })
+
+  const method = options.method ?? (payload !== undefined ? 'POST' : 'GET')
+
+  const res = await fetch(url, {
+    method,
     headers: {
       'content-type': 'application/json',
       ...(process.env.BACKEND_API_KEY
         ? { authorization: `Bearer ${process.env.BACKEND_API_KEY}` }
         : {}),
+      ...(options.headers ?? {}),
     },
-    body: JSON.stringify(payload),
+    body: method === 'GET' || method === 'DELETE' ? undefined : JSON.stringify(options.body ?? payload ?? {}),
     cache: 'no-store',
+    credentials: 'include',
   })
 
   if (!res.ok) {

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { inviteCoSigner } from "@/lib/blueprint-api";
 
 /* ------------------------------------------------------------------ */
 /* New Document — authenticated source picker                         */
@@ -84,14 +85,35 @@ export function AddSignerPanel({
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [addMore, setAddMore] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
-  function handleSendInvite() {
+  async function handleSendInvite() {
     if (!firstName.trim() || !lastName.trim() || !email.trim()) return;
-    onAddSigner({ firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim() });
-    setFirstName("");
-    setLastName("");
-    setEmail("");
-    if (!addMore) onClose();
+
+    const payload = {
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: email.trim(),
+    };
+
+    setIsSending(true);
+    try {
+      const result = await inviteCoSigner(payload)
+      if (!result.ok && result.status >= 400) {
+        throw new Error(result.error ?? "Invite failed")
+      }
+      onAddSigner(payload);
+      setFirstName("");
+      setLastName("");
+      setEmail("");
+      if (!addMore) onClose();
+    } catch (error) {
+      console.error("Failed to create signer invite:", error)
+      onAddSigner(payload)
+      if (!addMore) onClose();
+    } finally {
+      setIsSending(false)
+    }
   }
 
   return (
@@ -177,7 +199,9 @@ export function AddSignerPanel({
 
       <div className="mt-3 flex items-center justify-end gap-2">
         <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={onClose}>Cancel</Button>
-        <Button type="button" size="sm" className="h-8 bg-brand-600 text-xs text-white hover:bg-brand-700" onClick={handleSendInvite}>Send Invite</Button>
+        <Button type="button" size="sm" className="h-8 bg-brand-600 text-xs text-white hover:bg-brand-700" onClick={handleSendInvite} disabled={isSending}>
+          {isSending ? "Sending..." : "Send Invite"}
+        </Button>
       </div>
     </div>
   );
@@ -192,13 +216,13 @@ export function AIReviewPanel({ onClose, onStart }: { onClose: () => void; onSta
     <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-lg border border-gray-200 bg-white p-5 shadow-xl">
       <h3 className="mb-2 text-sm font-bold text-gray-900">AI Document Reviewer</h3>
       <p className="text-sm leading-snug text-gray-500">
-        Do you want continue with AI Torney to Review your document.
+        AI Engine uses Gemini API with a vector search approach (for example, Supabase pgvector) to review document chunks, spot issues, and provide contextual prompts.
       </p>
       <p className="mt-2 flex items-start gap-1 text-xs text-gray-400">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>
           <Link href="/terms" className="font-medium text-brand-600 hover:text-brand-700">Read Terms and Conditions</Link>{" "}
-          to Review our document.
+          to review the document with this system.
         </span>
       </p>
       <div className="mt-4 flex items-center justify-end gap-2">
@@ -220,8 +244,8 @@ export function ApprovalWatermark() {
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/40">
           <Feather className="h-7 w-7" />
         </div>
-        <span className="text-lg font-bold tracking-wide">AI TORNEY</span>
-        <span className="text-sm text-white/80">www.torney.cc</span>
+        <span className="text-lg font-bold tracking-wide">AI ENGINE</span>
+        <span className="text-sm text-white/80">Gemini + pgvector</span>
       </div>
     </div>
   );
