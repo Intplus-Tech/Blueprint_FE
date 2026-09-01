@@ -14,10 +14,12 @@ export function SiteFooter() {
   const linkClass =
     'rounded-sm transition-colors hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand'
 
+  const currentYear = new Date().getFullYear()
+
   return (
     <footer className="flex flex-col gap-6 px-5 py-6 text-sm text-white/80 sm:px-10 md:flex-row md:items-center md:justify-between">
       <p className="flex items-center gap-1.5 whitespace-nowrap">
-        <span aria-hidden="true">&copy;</span> 2025 Torney.cc.{' '}
+        <span aria-hidden="true">&copy;</span> {currentYear} Torney.cc.{' '}
         <span className="text-white/60">All Rights Reserved</span>
       </p>
 

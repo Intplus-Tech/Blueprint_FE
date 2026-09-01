@@ -9,7 +9,7 @@ type SiteHeaderProps = {
 export function SiteHeader({ onNavClick }: SiteHeaderProps) {
   return (
     <header className="flex items-center justify-between px-5 py-5 sm:px-10 sm:py-7">
-      <Logo />
+      <Logo variant="horizontal" size="lg" onDark />
       <nav aria-label="Account" className="flex items-center gap-2 text-sm text-white sm:text-base">
         <button
           type="button"

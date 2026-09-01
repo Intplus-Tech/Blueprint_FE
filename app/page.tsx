@@ -46,7 +46,7 @@ export default function Page() {
       {/* Cookie consent banner */}
       <AnimatePresence>
         {showCookies && (
-          <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-0 sm:px-4">
+          <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-4 pb-4 sm:px-6 sm:pb-6">
             <CookieBanner onClose={() => setShowCookies(false)} />
           </div>
         )}

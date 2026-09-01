@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { PT_Sans, Dancing_Script } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
+import { AppLayoutProvider } from '@/components/app-layout-provider'
 import './globals.css'
 
 const ptSans = PT_Sans({
@@ -18,25 +19,25 @@ const dancingScript = Dancing_Script({
 })
 
 export const metadata: Metadata = {
-  title: 'Blueprint doc — Sign. Review. Lock.',
+  title: 'BlueprintDoc | Online E-Signature Platform',
   description: 'The only e-signature platform with built-in forensic AI.',
   generator: 'v0.app',
   icons: {
     icon: [
       {
-        url: '/icon-light-32x32.png',
+        url: '/blueLogo.png',
         media: '(prefers-color-scheme: light)',
       },
       {
-        url: '/icon-dark-32x32.png',
+        url: '/blueLogo.png',
         media: '(prefers-color-scheme: dark)',
       },
       {
-        url: '/icon.svg',
+        url: '/blueLogo.png',
         type: 'image/svg+xml',
       },
     ],
-    apple: '/apple-icon.png',
+    apple: '/blueLogo.png',
   },
 }
 
@@ -74,7 +75,9 @@ export default function RootLayout({
             Skip to content
           </a>
           
-          {children}
+          <AppLayoutProvider>
+            {children}
+          </AppLayoutProvider>
           <Toaster />
         </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}

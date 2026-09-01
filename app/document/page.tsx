@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronLeft, FileText, Type, PenTool, Plus, UserPlus,
   Image as ImageIcon, Download, X, Settings, Bell, LogOut, Loader2,
@@ -11,15 +11,15 @@ import { cn } from "@/lib/utils";
 import { SignaturePanel, type SavedSignature } from "@/components/signature-panel";
 import { ToolInfoPopover } from "@/components/tool-info-popover";
 import { NewDocumentPanel, AddSignerPanel, AIReviewPanel, ApprovalWatermark, type Signer } from "@/components/document-panels";
+import { inviteCoSigner } from '@/lib/blueprint-api'
+import { createNotification } from '@/lib/notifications'
 import { AITorneyChat } from "@/components/ai-torney-chat";
 import { PdfPageCanvas } from "@/components/pdf-page-canvas";
+import { TrialGateModal } from "@/components/trial-gate-modal";
 import { getPdfjs, PDF_STORAGE_KEY, PDF_NAME_KEY, type PdfDocumentProxy } from "@/lib/pdf";
 
-const FALLBACK_PAGE_COUNT = 5;
-const DEFAULT_DOC_NAME = "Contract Agreement Star Klint...";
-
-const LOREM =
-  "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas porttitor congue massa. Fusce posuere, magna sed pulvinar ultricies, purus lectus malesuada libero, sit amet commodo magna eros quis urna. Nunc viverra imperdiet enim. Fusce est. Vivamus a tellus. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Proin pharetra nonummy pede. Mauris et orci.\n\nAenean nec lorem. In porttitor. Donec laoreet nonummy augue. Suspendisse dui purus, scelerisque at, vulputate vitae, pretium mattis, nunc. Mauris eget neque at sem venenatis eleifend. Ut nonummy. Fusce aliquet pede non pede. Suspendisse dapibus lorem pellentesque magna. Integer nulla. Donec blandit feugiat ligula. Donec hendrerit, felis et imperdiet euismod, purus ipsum pretium metus, in lacinia nisl eget sapien.\n\nDonec ut est in lectus consequat consequat. Etiam eget dui. Aliquam erat volutpat. Sed at lorem in nunc porta tristique. Proin nec augue. Quisque aliquam tempor magna. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Nunc ac magna. Maecenas odio dolor, vulputate vel, auctor ac, accumsan id, felis.";
+const FALLBACK_PAGE_COUNT = 1;
+const DEFAULT_DOC_NAME = "Untitled document";
 
 type ToolId = "view" | "textField" | "signature" | "newDocument" | "cosigner" | "aiReview" | "download";
 type PlacedSignature = SavedSignature & { x: number; y: number };
@@ -34,9 +34,11 @@ export default function DocumentPage() {
 
 function DocumentPageInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const isAuthenticated = searchParams.get("from") === "dashboard";
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [gateFeature, setGateFeature] = useState<"ai-review" | "cosign" | null>(null);
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
   const [panelTab, setPanelTab] = useState<string>("history");
   const [savedSignatures, setSavedSignatures] = useState<SavedSignature[]>([]);
@@ -51,8 +53,6 @@ function DocumentPageInner() {
   const [docName, setDocName] = useState(DEFAULT_DOC_NAME);
 
   // Load a PDF handed off from the landing page / dashboard upload flow.
-  // No backend here, so it travels via sessionStorage as a data URL — see lib/pdf.ts.
-  // Falls back to placeholder lorem-ipsum content if nothing was uploaded.
   useEffect(() => {
     let active = true;
 
@@ -91,6 +91,17 @@ function DocumentPageInner() {
       window.print();
       return;
     }
+
+    if (tool === "cosigner" && !isAuthenticated) {
+      setGateFeature("cosign");
+      return;
+    }
+
+    if (tool === "aiReview" && !isAuthenticated) {
+      setGateFeature("ai-review");
+      return;
+    }
+
     setActiveTool((prev) => (prev === tool ? null : tool));
   }
 
@@ -109,7 +120,24 @@ function DocumentPageInner() {
   }
 
   function handleResendInvite(id: string) {
-    console.log("Resend invite to signer", id);
+    const signer = signers.find((s) => s.id === id);
+    if (!signer) return console.error('Signer not found for resend:', id);
+
+    const firstName = signer.firstName ?? signer.email?.split('@')[0] ?? '';
+    const lastName = signer.lastName ?? '';
+
+    inviteCoSigner({ firstName, lastName, email: signer.email ?? '' })
+      .then((res) => {
+        if (res.ok) {
+          createNotification.cosign('Invite sent', `Resent invite to ${signer.firstName} ${signer.lastName || ''}`);
+        } else {
+          createNotification.system('Invite failed', `Unable to resend invite to ${signer.firstName} ${signer.lastName || ''}`);
+        }
+      })
+      .catch((err) => {
+        console.error('Resend invite failed', err);
+        createNotification.system('Invite failed', `Unable to resend invite to ${signer.firstName} ${signer.lastName || ''}`);
+      });
   }
 
   function handleNewDocumentSelected(fileName: string) {
@@ -166,6 +194,20 @@ function DocumentPageInner() {
 
       <div className="px-4 py-2 text-xs text-gray-500 sm:px-6">{breadcrumb}</div>
 
+      {gateFeature && (
+        <TrialGateModal
+          feature={gateFeature}
+          isActive={true}
+          onAccept={() => router.push("/login")}
+          onDismiss={() => {
+            setGateFeature(null);
+            setActiveTool(null);
+          }}
+          trialDaysRemaining={30}
+          subscriptionRequired={false}
+        />
+      )}
+
       <div className="relative flex flex-1 gap-4 overflow-hidden p-4 sm:p-6">
         <aside className="hidden w-32 shrink-0 space-y-4 overflow-y-auto sm:block">
           {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
@@ -204,14 +246,17 @@ function DocumentPageInner() {
 
             {pdfStatus === "error" && (
               <div className="flex min-h-[900px] flex-col items-center justify-center gap-2 px-8 text-center text-gray-400">
-                <span className="text-sm">Couldn&apos;t render that PDF — showing sample content instead.</span>
+                <span className="text-sm">The document could not be rendered. Please try uploading it again.</span>
               </div>
             )}
 
             {pdfDoc && pdfStatus === "ready" && <PdfPageCanvas pdfDoc={pdfDoc} pageNumber={currentPage} targetWidth={560} />}
 
-            {!pdfDoc && pdfStatus !== "loading" &&
-              LOREM.split("\n\n").map((para, i) => <p key={i} className="mb-4 whitespace-pre-line">{para}</p>)}
+            {!pdfDoc && pdfStatus !== "loading" && (
+              <div className="flex min-h-[900px] items-center justify-center px-8 text-center text-gray-500">
+                <p>Upload a document to preview it here.</p>
+              </div>
+            )}
 
             {placed && (
               <DraggableSignature signature={placed} containerRef={pageRef} onChange={setPlaced} onRemove={() => setPlaced(null)} onDragStateChange={setIsDraggingSignature} />

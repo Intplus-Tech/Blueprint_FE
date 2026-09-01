@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { invoiceTotal, type Invoice } from "@/lib/invoice-types";
 import { InvoicePreviewModal } from "@/components/invoice-preview-modal";
 import { InvoiceEditorModal } from "@/components/invoice-editor-modal";
 import { TemplateGallery, TemplatePreviewModal, type Template } from "@/components/invoice-templates";
+import { saveInvoice } from "@/lib/blueprint-api";
 
 const INITIAL_INVOICES: Invoice[] = [
   {
@@ -32,6 +33,157 @@ const INITIAL_INVOICES: Invoice[] = [
 type SubTab = "my" | "templates" | "editor";
 type EditorState = { mode: "create" | "update"; invoice?: Invoice; template?: Template } | null;
 
+// ---- Editor's Panel (Image 3) -------------------------------------------
+
+type BrandInfo = { isotype: string; logotype: string };
+type InvoiceInfo = { name: string; address: string; taxNumber: string; signature: string };
+type CompanyInfo = { web: string; email: string; phone: string };
+type CurrencyInfo = { symbol: string; code: string; enabled: string[] };
+
+const CURRENCY_OPTIONS = [
+  { code: "USD", flag: "🇺🇸" },
+  { code: "EUR", flag: "🇪🇺" },
+  { code: "GBP", flag: "🇬🇧" },
+  { code: "CHF", flag: "🇨🇭" },
+  { code: "JPY", flag: "🇯🇵" },
+  { code: "NGN", flag: "🇳🇬" },
+  { code: "BTC", flag: "₿" },
+];
+
+function EditorField({ label, value, onChange, textarea }: { label: string; value: string; onChange: (v: string) => void; textarea?: boolean }) {
+  const shared = "w-full rounded-md border border-[#dfe8f2] bg-[#f6f8fb] px-2.5 py-2 text-xs text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500";
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-[11px] font-medium text-gray-500">{label}</label>
+      {textarea ? (
+        <textarea rows={2} value={value} onChange={(e) => onChange(e.target.value)} className={shared} />
+      ) : (
+        <input value={value} onChange={(e) => onChange(e.target.value)} className={shared} />
+      )}
+    </div>
+  );
+}
+
+function EditorCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-[#dfe7f1] bg-[#f7f9fb] p-4 shadow-sm">
+      <div className="rounded-md bg-[#edf4fb] px-2 py-1.5">
+        <h3 className="text-xs font-semibold text-[#2d5478]">{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function EditorsPanel() {
+  const [brand, setBrand] = useState<BrandInfo>({ isotype: "", logotype: "" });
+  const [invoiceInfo, setInvoiceInfo] = useState<InvoiceInfo>({
+    name: "BRIX Agency", address: "Pablo Alto, San Francisco, CA 94106, United States of America", taxNumber: "12345 6789 US0001", signature: "",
+  });
+  const [company, setCompany] = useState<CompanyInfo>({ web: "www.brixagency.com", email: "contact@brixagency.com", phone: "0802 - 879 - 0102" });
+  const [currency, setCurrency] = useState<CurrencyInfo>({ symbol: "N", code: "NGN", enabled: ["USD", "NGN"] });
+
+  function toggleCurrency(code: string) {
+    setCurrency((prev) => ({
+      ...prev,
+      enabled: prev.enabled.includes(code) ? prev.enabled.filter((c) => c !== code) : [...prev.enabled, code],
+    }));
+  }
+
+  return (
+    <div className="mt-6">
+      <div className="mb-4 flex items-center gap-2 rounded-md border border-[#dfe7f1] bg-[#edf4fb]/80 px-3 py-2.5">
+        <div className="flex h-5 w-5 items-center justify-center rounded-md bg-[#dfeefb] text-brand-600">
+          <Pencil className="h-3.5 w-3.5" />
+        </div>
+        <h2 className="text-sm font-semibold text-gray-900">Edition Panel</h2>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <EditorCard title="Brand">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-medium text-gray-500">Isotype</label>
+              <button type="button" className="text-[10px] font-medium text-brand-600 hover:underline">Change</button>
+            </div>
+            <div className="flex h-16 items-center justify-center rounded-md border border-dashed border-gray-200 bg-gray-50">
+              {brand.isotype ? (
+                <img src={brand.isotype} alt="Isotype" className="h-full w-full object-contain" />
+              ) : (
+                <span className="text-[10px] text-gray-300">No image</span>
+              )}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-medium text-gray-500">Logotype</label>
+              <button type="button" className="text-[10px] font-medium text-brand-600 hover:underline">Change</button>
+            </div>
+            <div className="flex h-16 items-center justify-center rounded-md border border-dashed border-gray-200 bg-gray-50">
+              {brand.logotype ? (
+                <img src={brand.logotype} alt="Logotype" className="h-full w-full object-contain" />
+              ) : (
+                <span className="text-[10px] text-gray-300">No image</span>
+              )}
+            </div>
+          </div>
+        </EditorCard>
+
+        <EditorCard title="Invoice information">
+          <EditorField label="Name/Company" value={invoiceInfo.name} onChange={(v) => setInvoiceInfo((p) => ({ ...p, name: v }))} />
+          <EditorField label="Address" value={invoiceInfo.address} onChange={(v) => setInvoiceInfo((p) => ({ ...p, address: v }))} textarea />
+          <EditorField label="Tax Number" value={invoiceInfo.taxNumber} onChange={(v) => setInvoiceInfo((p) => ({ ...p, taxNumber: v }))} />
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-gray-500">Signature</label>
+            <div className="flex h-12 items-center justify-center rounded-md border border-dashed border-gray-200 bg-gray-50">
+              {invoiceInfo.signature ? (
+                <img src={invoiceInfo.signature} alt="Signature" className="h-full object-contain" />
+              ) : (
+                <span className="font-serif text-sm italic text-gray-400">Jon Snow</span>
+              )}
+            </div>
+          </div>
+        </EditorCard>
+
+        <EditorCard title="Company Information">
+          <EditorField label="Web" value={company.web} onChange={(v) => setCompany((p) => ({ ...p, web: v }))} />
+          <EditorField label="Email" value={company.email} onChange={(v) => setCompany((p) => ({ ...p, email: v }))} />
+          <EditorField label="Number Phone" value={company.phone} onChange={(v) => setCompany((p) => ({ ...p, phone: v }))} />
+        </EditorCard>
+
+        <EditorCard title="Other information">
+          <EditorField label="Currency Symbol" value={currency.symbol} onChange={(v) => setCurrency((p) => ({ ...p, symbol: v }))} />
+          <EditorField label="Currency Code" value={currency.code} onChange={(v) => setCurrency((p) => ({ ...p, code: v }))} />
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-gray-500">Currencies</label>
+            <div className="flex flex-wrap gap-2">
+              {CURRENCY_OPTIONS.map((c) => {
+                const active = currency.enabled.includes(c.code);
+                return (
+                  <button
+                    key={c.code}
+                    type="button"
+                    onClick={() => toggleCurrency(c.code)}
+                    className={cn(
+                      "flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-medium transition-colors",
+                      active ? "border-brand-300 bg-brand-50 text-brand-700" : "border-gray-200 bg-gray-50 text-gray-500"
+                    )}
+                  >
+                    <span>{c.flag}</span>
+                    {c.code}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </EditorCard>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 export function InvoicesPanel({ onBreadcrumbChange }: { onBreadcrumbChange?: (text: string) => void }) {
   const [invoices, setInvoices] = useState<Invoice[]>(INITIAL_INVOICES);
   const [subTab, setSubTab] = useState<SubTab>("my");
@@ -48,13 +200,15 @@ export function InvoicesPanel({ onBreadcrumbChange }: { onBreadcrumbChange?: (te
     } else if (editor?.mode === "create") {
       onBreadcrumbChange?.("Invoices > Create Invoice");
     } else if (previewId) {
-      onBreadcrumbChange?.("Invoices > Create Invoice");
+      // Fixed: this used to incorrectly reuse "Invoices > Create Invoice".
+      // Image 2 shows the preview modal breadcrumb reading just "Preview".
+      onBreadcrumbChange?.("Preview");
     } else if (templatePreview) {
       onBreadcrumbChange?.("Invoices > All Templates");
     } else if (subTab === "templates") {
       onBreadcrumbChange?.("Invoices > All Templates");
     } else if (subTab === "editor") {
-      onBreadcrumbChange?.("Invoices > Editor's Panel");
+      onBreadcrumbChange?.("Invoices > All Templates");
     } else {
       onBreadcrumbChange?.("Invoices > My Invoices");
     }
@@ -67,26 +221,35 @@ export function InvoicesPanel({ onBreadcrumbChange }: { onBreadcrumbChange?: (te
 
   const previewInvoice = invoices.find((inv) => inv.id === previewId) ?? null;
 
-  function handleCreateSubmit(data: Omit<Invoice, "id" | "status">) {
-    setInvoices((prev) => [{ ...data, id: crypto.randomUUID(), status: "Draft" }, ...prev]);
+  async function handleCreateSubmit(data: Omit<Invoice, "id" | "status">) {
+    const payload = { ...data, status: "Draft" };
+    const result = await saveInvoice(payload)
+    const newInvoice = {
+      ...payload,
+      id: typeof result.data?.id === "string" ? result.data.id : crypto.randomUUID(),
+      status: (typeof result.data?.status === "string" ? result.data.status : payload.status) as Invoice["status"],
+    };
+    setInvoices((prev) => [newInvoice, ...prev]);
     setEditor(null);
   }
 
-  function handleUpdateSubmit(data: Omit<Invoice, "id" | "status">) {
+  async function handleUpdateSubmit(data: Omit<Invoice, "id" | "status">) {
     if (!editor?.invoice) return;
-    setInvoices((prev) => prev.map((inv) => (inv.id === editor.invoice!.id ? { ...inv, ...data } : inv)));
+    const payload = { ...data, status: editor.invoice.status };
+    await saveInvoice(payload)
+    setInvoices((prev) => prev.map((inv) => (inv.id === editor.invoice!.id ? { ...inv, ...payload, status: editor.invoice!.status } : inv)));
     setEditor(null);
   }
 
   return (
-    <div className="mt-4 rounded-lg bg-white p-4 shadow-sm sm:p-6">
+    <div className="mt-4 rounded-lg bg-transparent p-0 shadow-none sm:p-0">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold text-gray-900">Invoices</h1>
+          <h1 className="text-[2.1rem] font-black tracking-[-0.04em] text-gray-900">Invoices</h1>
           <nav className="flex items-center gap-4 text-sm">
             <SubTabButton label="My Invoices" active={subTab === "my"} onClick={() => setSubTab("my")} />
             <SubTabButton label="All Templates" active={subTab === "templates"} onClick={() => setSubTab("templates")} />
-            <SubTabButton label="Editor's Panel" active={subTab === "editor"} onClick={() => setSubTab("editor")} />
+            <SubTabButton label="Editor&apos;s Panel" active={subTab === "editor"} onClick={() => setSubTab("editor")} />
           </nav>
         </div>
 
@@ -113,11 +276,7 @@ export function InvoicesPanel({ onBreadcrumbChange }: { onBreadcrumbChange?: (te
         )}
       </div>
 
-      {subTab === "editor" && (
-        <div className="mt-6 flex h-56 items-center justify-center rounded-lg border border-dashed border-gray-200 text-sm text-gray-400">
-          Editor&apos;s Panel coming soon.
-        </div>
-      )}
+      {subTab === "editor" && <EditorsPanel />}
 
       {subTab === "templates" && (
         <TemplateGallery
@@ -192,9 +351,12 @@ function SubTabButton({ label, active, onClick }: { label: string; active: boole
     <button
       type="button"
       onClick={onClick}
-      className={cn("flex items-center gap-1 border-b-2 pb-0.5 font-medium transition-colors", active ? "border-brand-600 text-gray-900" : "border-transparent text-gray-400 hover:text-gray-600")}
+      className={cn(
+        "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+        active ? "bg-[#1f2937] text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
+      )}
     >
-      {active && <span className="text-brand-600">✓</span>}
+      {active && <span className="text-white">✓</span>}
       {label}
     </button>
   );
@@ -226,7 +388,12 @@ function InvoiceCard({ invoice, onClick }: { invoice: Invoice; onClick: () => vo
       </div>
       <div className="border-t border-gray-100 px-3 py-2">
         <div className="flex items-center justify-between text-xs text-gray-500">
-          <span className="capitalize">{invoice.status}</span>
+          <span className={cn(
+            "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium",
+            invoice.status === "Paid" && "bg-emerald-100 text-emerald-700",
+            invoice.status === "Sent" && "bg-blue-100 text-blue-700",
+            invoice.status === "Draft" && "bg-gray-100 text-gray-700"
+          )}>{invoice.status}</span>
           <span className="font-semibold text-gray-900">${total.toLocaleString()}</span>
         </div>
       </div>

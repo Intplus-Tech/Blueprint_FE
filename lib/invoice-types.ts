@@ -5,6 +5,8 @@ export type InvoiceItem = {
   rate: number;
 };
 
+export type InvoiceStatus = "Draft" | "Sent" | "Paid";
+
 export type Invoice = {
   id: string;
   invoiceNumber: string;
@@ -18,7 +20,7 @@ export type Invoice = {
   tax: number;
   discount: number;
   terms: string;
-  status: "Draft" | "Sent";
+  status: InvoiceStatus;
 };
 
 export function invoiceTotal(invoice: Pick<Invoice, "items" | "tax" | "discount">) {

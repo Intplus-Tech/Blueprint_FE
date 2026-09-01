@@ -12,7 +12,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { postJson } from '@/lib/api-client'
+import { storePdfFile } from '@/lib/pdf'
 import type { UploadPayload } from '@/lib/schemas'
+import { useRouter } from 'next/navigation'
 
 type SourceId = UploadPayload['source']
 
@@ -74,18 +76,29 @@ async function registerUpload(payload: UploadPayload) {
 
 export function UploadDropzone() {
   const reduceMotion = useReducedMotion()
+  const router = useRouter()
   const [dragging, setDragging] = useState(false)
   const [fileName, setFileName] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   function handleFile(file: File, source: SourceId) {
     setFileName(file.name)
+    // Store the file locally so the document viewer can render it
+    void storePdfFile(file)
+    // Mark user as guest for client-side gating
+    try {
+      document.cookie = `bp-role=guest; max-age=${60 * 60 * 24}; path=/`
+    } catch (e) {
+      // ignore in non-browser contexts
+    }
     void registerUpload({
       fileName: file.name,
       size: file.size,
       type: file.type,
       source,
     })
+    // Navigate to document viewer in guest mode
+    router.push('/document?from=guest')
   }
 
   function handleSource(source: Source) {
