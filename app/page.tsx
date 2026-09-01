@@ -24,11 +24,11 @@ export default function Page() {
   }
 
   return (
-    <main className="relative flex min-h-dvh flex-col overflow-hidden text-white">
+    <main className="tablet-responsive relative flex min-h-dvh flex-col overflow-hidden text-white">
       <AnimatedBackground />
 
       {/* Foreground content */}
-      <div id="main" className="relative z-10 flex min-h-dvh flex-col">
+      <div id="main" className="tablet-main relative z-10 flex min-h-dvh flex-col">
         <SiteHeader onNavClick={handleNavClick} />
         <Hero />
         <SiteFooter />
