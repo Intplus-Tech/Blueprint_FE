@@ -83,14 +83,9 @@ export function UploadDropzone() {
 
   function handleFile(file: File, source: SourceId) {
     setFileName(file.name)
-    // Store the file locally so the document viewer can render it
+    // Store the file locally so the document viewer can render it.
+    // No browser cookies are set here; the backend owns any session state.
     void storePdfFile(file)
-    // Mark user as guest for client-side gating
-    try {
-      document.cookie = `bp-role=guest; max-age=${60 * 60 * 24}; path=/`
-    } catch (e) {
-      // ignore in non-browser contexts
-    }
     void registerUpload({
       fileName: file.name,
       size: file.size,

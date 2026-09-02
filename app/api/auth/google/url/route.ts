@@ -12,19 +12,9 @@ export async function GET(request: NextRequest) {
       })
       return NextResponse.json({ ok: true, forwarded: result.forwarded, data: result.data })
     }
-
-    const fallbackPath = '/dashboard?google=success'
-    return NextResponse.json({
-      ok: true,
-      forwarded: false,
-      data: {
-        authUrl: fallbackPath,
-        provider: 'google',
-        mode: 'local-fallback',
-      },
-    })
+    return NextResponse.json({ error: 'Auth backend not configured' }, { status: 503 })
   } catch (err) {
     console.error('Auth/google/url proxy error:', err)
-    return NextResponse.json({ ok: true, forwarded: false, data: { authUrl: '/dashboard?google=success', provider: 'google', mode: 'local-fallback' } })
+    return NextResponse.json({ error: 'Failed to reach auth backend' }, { status: 502 })
   }
 }

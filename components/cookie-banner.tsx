@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { postJson } from '@/lib/api-client'
-import { saveCookiePreferences } from '@/lib/cookie-preferences'
 import type { CookieConsent } from '@/lib/schemas'
 
 type Prefs = Omit<CookieConsent, 'essentials'> & { essentials: true }
@@ -29,10 +28,11 @@ export function CookieBanner({ onClose }: { onClose: () => void }) {
       : { essentials: true, marketing: false, externalMedia: false }
     const res = await postJson('/api/cookie-consent', payload)
     if (res.ok) {
-      saveCookiePreferences(payload)
-      toast.success(accepted ? 'Preferences saved' : 'Only essentials kept')
+      toast.success(
+        accepted ? 'Preferences acknowledged (no-op frontend)' : 'Only essentials kept (no-op frontend)',
+      )
     } else {
-      toast.error('Could not save preferences')
+      toast.error('Could not acknowledge preferences')
     }
     onClose()
   }

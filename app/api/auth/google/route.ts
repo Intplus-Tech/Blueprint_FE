@@ -1,6 +1,31 @@
 import { NextResponse } from 'next/server'
-import { googleAuthSchema } from '@/lib/schemas'
 import { forwardToBackend } from '@/lib/backend'
+
+export async function GET(request: Request) {
+  const hasBackend = Boolean(process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKEND_API_URL)
+
+  if (!hasBackend) {
+    return NextResponse.json({ error: 'Auth backend not configured' }, { status: 503 })
+  }
+
+  const url = new URL(request.url)
+  const code = url.searchParams.get('code')
+
+  if (!code) {
+    return NextResponse.json({ error: 'Google auth code is required' }, { status: 400 })
+  }
+
+  try {
+    const result = await forwardToBackend('/auth/google/callback', undefined, {
+      method: 'GET',
+      query: { code },
+    })
+    return NextResponse.json({ ok: true, forwarded: result.forwarded, data: result.data })
+  } catch (error) {
+    console.error('Google callback proxy failed:', error)
+    return NextResponse.json({ error: 'Failed to reach auth backend' }, { status: 502 })
+  }
+}
 
 export async function POST(request: Request) {
   let body: unknown
@@ -10,52 +35,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const parsed = googleAuthSchema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Validation failed', issues: parsed.error.flatten() },
-      { status: 422 },
-    )
-  }
+  const code = typeof body === 'object' && body && 'code' in body ? String((body as { code?: string }).code) : ''
 
-  const createLocalResponse = () => {
-    const user = {
-      id: 'local-google-user',
-      name: parsed.data.name,
-      email: parsed.data.email,
-      provider: 'google',
-      authenticated: true,
-      createdAt: new Date().toISOString(),
-    }
-
-    const response = NextResponse.json({
-      ok: true,
-      forwarded: false,
-      data: { user, authenticated: true },
-      mode: 'local-fallback',
-    })
-
-    response.cookies.set('bp-google-auth', JSON.stringify(user), {
-      httpOnly: true,
-      path: '/',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7,
-    })
-
-    return response
+  if (!code) {
+    return NextResponse.json({ error: 'Google auth code is required' }, { status: 400 })
   }
 
   const hasBackend = Boolean(process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKEND_API_URL)
 
   if (!hasBackend) {
-    return createLocalResponse()
+    return NextResponse.json({ error: 'Auth backend not configured' }, { status: 503 })
   }
 
   try {
-    const result = await forwardToBackend('/auth/google', parsed.data)
-    return NextResponse.json(result, { status: 200 })
+    const result = await forwardToBackend('/auth/google/callback', undefined, {
+      method: 'GET',
+      query: { code },
+    })
+    return NextResponse.json({ ok: true, forwarded: result.forwarded, data: result.data })
   } catch (error) {
     console.error('Google auth backend proxy failed:', error)
-    return createLocalResponse()
+    return NextResponse.json({ error: 'Failed to reach auth backend' }, { status: 502 })
   }
 }

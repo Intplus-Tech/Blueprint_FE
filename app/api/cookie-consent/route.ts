@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import { cookieConsentSchema } from '@/lib/schemas'
-import { forwardToBackend } from '@/lib/backend'
 
+/**
+ * Cookie consent is intentionally a no-op on the frontend.
+ * The backend owns this state and the browser does not persist consent.
+ */
 export async function POST(request: Request) {
   let body: unknown
   try {
@@ -18,46 +21,12 @@ export async function POST(request: Request) {
     )
   }
 
-  const createLocalResponse = () => {
-    const response = NextResponse.json({
-      ok: true,
-      forwarded: false,
-      data: parsed.data,
-      mode: 'local-fallback',
-    })
-
-    response.cookies.set('bp-cookie-consent', JSON.stringify(parsed.data), {
-      path: '/',
-      maxAge: 60 * 60 * 24 * 30,
-      sameSite: 'lax',
-    })
-
-    return response
-  }
-
-  const hasBackend = Boolean(process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_BACKEND_API_URL)
-
-  if (!hasBackend) {
-    return createLocalResponse()
-  }
-
-  try {
-    const result = await forwardToBackend('/cookie-consent', parsed.data)
-    const response = NextResponse.json({
-      ok: true,
-      forwarded: true,
-      data: result.data ?? parsed.data,
-    })
-
-    response.cookies.set('bp-cookie-consent', JSON.stringify(parsed.data), {
-      path: '/',
-      maxAge: 60 * 60 * 24 * 30,
-      sameSite: 'lax',
-    })
-
-    return response
-  } catch (error) {
-    console.error('Cookie consent backend proxy failed:', error)
-    return createLocalResponse()
-  }
+  return NextResponse.json({
+    ok: true,
+    noop: true,
+    forwarded: false,
+    data: parsed.data,
+    message:
+      'Cookie consent is intentionally a no-op on the frontend; the backend owns consent state without browser persistence.',
+  })
 }

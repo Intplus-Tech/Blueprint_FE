@@ -11,19 +11,7 @@ function getGoogleSessionUser() {
   if (typeof window === 'undefined') {
     return { name: 'Google User', email: 'google-user@example.com' }
   }
-
-  try {
-    const saved = window.localStorage.getItem('bp-google-user')
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      if (parsed?.name && parsed?.email) {
-        return { name: parsed.name, email: parsed.email }
-      }
-    }
-  } catch {
-    // ignore invalid cached user data
-  }
-
+  // localStorage usage removed; always return default placeholder
   return { name: 'Google User', email: 'google-user@example.com' }
 }
 
@@ -53,31 +41,22 @@ export function GoogleOneTap({ onClose }: { onClose: () => void }) {
         const url = data?.authUrl ?? data?.url ?? data?.redirectUrl
 
         if (typeof url === 'string' && url.startsWith('http')) {
-          localStorage.setItem('bp-google-user', JSON.stringify(user))
           window.location.href = url
           return
         }
 
         if (typeof url === 'string' && url.startsWith('/')) {
-          localStorage.setItem('bp-google-user', JSON.stringify(user))
           window.location.href = url
           return
         }
       }
 
-      const fallback = await postJson('/api/auth/google', user)
-      if (fallback.ok) {
-        localStorage.setItem('bp-google-user', JSON.stringify(user))
-        toast.success(`Signed in as ${user.name}`)
-        onClose()
-        router.push('/dashboard')
-      } else {
-        toast.error('Sign-in failed')
-        onClose()
-      }
+      // No fallback or mock authentication — show an error
+      toast.error('Google authentication is currently unavailable. Please try again later.')
+      onClose()
+      return
     } catch (err) {
       console.error('Google One Tap sign-in error', err)
-      localStorage.setItem('bp-google-user', JSON.stringify(user))
       toast.error('Sign-in failed')
       onClose()
     }

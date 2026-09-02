@@ -15,30 +15,20 @@ export async function POST(request: NextRequest) {
       documentText: typeof body.documentText === 'string' ? body.documentText : '',
     }
 
-    const candidatePaths = ['/ai/review', '/documents/review', '/review']
+    const exactPath = '/ai/review'
 
-    for (const path of candidatePaths) {
-      try {
-        const result = await forwardToBackend(path, payload)
-        if (result.forwarded) {
-          return NextResponse.json({ ok: true, forwarded: true, data: result.data })
-        }
-      } catch {
-        // continue to next candidate until one succeeds
+    try {
+      const result = await forwardToBackend(exactPath, payload)
+      if (result.forwarded) {
+        return NextResponse.json({ ok: true, forwarded: true, data: result.data })
       }
+    } catch {
+      // backend route is valid but currently unavailable
     }
 
-    return NextResponse.json({
-      ok: true,
-      forwarded: false,
-      data: {
-        summary: FALLBACK_SUMMARY.trim(),
-        risks: ['Termination terms', 'Payment timing', 'Confidentiality clauses'],
-        answer: 'The document was reviewed locally because no backend review service is configured yet.',
-      },
-    })
+    return NextResponse.json({ error: 'AI review service unavailable' }, { status: 503 })
   } catch (error) {
     console.error('AI review proxy error:', error)
-    return NextResponse.json({ ok: false, error: 'AI review failed' }, { status: 500 })
+    return NextResponse.json({ ok: false, error: 'AI review failed' }, { status: 502 })
   }
 }

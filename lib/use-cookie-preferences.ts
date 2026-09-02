@@ -22,13 +22,14 @@ export interface UseCookiePreferencesReturn {
 }
 
 /**
- * Hook to manage cookie preferences with cookie-based persistence (no localStorage)
+ * Hook to manage cookie preferences in the current session.
+ * Consent is sent to the backend and is not persisted in the browser.
  */
 export function useCookiePreferences(): UseCookiePreferencesReturn {
   const [preferences, setPreferences] = useState<CookieConsent | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
 
-  // Load preferences on mount
+  // Load preferences on mount from the backend-only consent state.
   useEffect(() => {
     const saved = getSavedCookiePreferences()
     if (saved) {

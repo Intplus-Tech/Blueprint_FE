@@ -113,11 +113,26 @@ export async function handleGoogleCallback(code: string) {
   }
 }
 
+/** Persistence to localStorage has been removed for privacy reasons. */
+export function persistAuthSession(_payload: any) {
+  if (typeof window === 'undefined') return
+  // intentionally no-op: storage persistence disabled
+  console.warn('persistAuthSession: localStorage persistence disabled')
+}
+
+export function clearAuthSession() {
+  if (typeof window === 'undefined') return
+  // intentionally no-op: storage persistence disabled
+  console.warn('clearAuthSession: localStorage persistence disabled')
+}
+
 /** Register user */
 export async function registerUser(data: {
+  fullName: string
   email: string
+  industry: string
   password: string
-  name?: string
+  role?: string
 }) {
   try {
     const response = await axiosInstance.post('/auth/register', data)

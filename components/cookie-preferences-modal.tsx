@@ -179,7 +179,7 @@ export function CookiePreferencesModal({ isOpen, onClose }: CookiePreferencesMod
 
         {/* Help text */}
         <p className="mt-4 text-xs text-muted-foreground text-center">
-          Your preferences are saved in your browser and can be updated anytime.
+          Your consent is sent to the backend and can be updated from this site at any time.
         </p>
       </motion.div>
     </div>

@@ -46,7 +46,7 @@ export function CloudStorageSelector({
       }
 
       if (result?.ok !== false) {
-        localStorage.setItem('bp-cloud-google-drive', JSON.stringify({ provider: 'google-drive', connectedAt: new Date().toISOString() }))
+        // localStorage persistence removed; simply notify caller
         onFileSelected?.(result as any)
       }
     } catch (err) {
