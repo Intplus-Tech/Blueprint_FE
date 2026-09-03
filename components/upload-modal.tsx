@@ -4,15 +4,18 @@ import { useCallback, useRef, useState } from "react";
 import { UploadCloud, FileText, ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { CloudStorageSelector } from '@/components/cloud-storage-selector'
 
 export function UploadModal({
   open,
   onClose,
   onUploaded,
+  onCloudUploaded,
 }: {
   open: boolean;
   onClose: () => void;
   onUploaded: (file: File) => void;
+  onCloudUploaded?: (meta: { name: string; url?: string; size?: number }) => void;
 }) {
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -23,6 +26,22 @@ export function UploadModal({
     if (!incoming || incoming.length === 0) return;
     setFiles((prev) => [...prev, ...Array.from(incoming)]);
   }, []);
+
+  const [showCloudSelector, setShowCloudSelector] = useState<null | 'gdrive' | 'onedrive' | 'dropbox'>(null);
+
+  function handleCloudFileSelected(response: any) {
+    // Cloud selector may redirect to provider or return an upload result.
+    // For now just close the selector and modal; backend/upload callbacks can be handled elsewhere.
+    setShowCloudSelector(null);
+    // Try to extract a file name/url from common response shapes
+    const name = response?.data?.fileName ?? response?.fileName ?? response?.data?.name ?? response?.name ?? response?.data?.url?.split('/').pop();
+    const url = response?.data?.url ?? response?.url ?? response?.data?.fileUrl ?? response?.fileUrl;
+    const size = response?.data?.size ?? response?.size;
+    if (name && onCloudUploaded) {
+      onCloudUploaded({ name, url, size });
+    }
+    onClose();
+  }
 
   function handleDrop(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -67,14 +86,26 @@ export function UploadModal({
 
             {menuOpen && (
               <div className="absolute left-0 top-full z-10 mt-2 w-44 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-                {["From computer", "From Google Drive", "From Dropbox"].map((option) => (
+                {[
+                  { label: 'From computer', id: 'computer' },
+                  { label: 'From Google Drive', id: 'gdrive' },
+                  { label: 'From OneDrive', id: 'onedrive' },
+                  { label: 'From Dropbox', id: 'dropbox' },
+                ].map((option) => (
                   <button
-                    key={option}
+                    key={option.id}
                     type="button"
                     className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                    onClick={() => { setMenuOpen(false); if (option === "From computer") inputRef.current?.click(); }}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      if (option.id === 'computer') {
+                        inputRef.current?.click();
+                        return;
+                      }
+                      setShowCloudSelector(option.id as 'gdrive' | 'onedrive' | 'dropbox');
+                    }}
                   >
-                    {option}
+                    {option.label}
                   </button>
                 ))}
               </div>
@@ -84,6 +115,12 @@ export function UploadModal({
           <input ref={inputRef} type="file" className="hidden" onChange={(e) => addFiles(e.target.files)} />
 
           <p className="text-sm text-gray-500">{files.length > 0 ? files[0].name : "Drag your files here"}</p>
+
+          {showCloudSelector && (
+            <div className="w-full mt-4">
+              <CloudStorageSelector onFileSelected={handleCloudFileSelected} onClose={() => setShowCloudSelector(null)} />
+            </div>
+          )}
         </div>
 
         {files.length > 0 && (

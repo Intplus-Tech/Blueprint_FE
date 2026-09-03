@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { postJson } from '@/lib/api-client'
+import type { CookieConsent } from '@/lib/cookie-preferences'
 import { useCookiePreferences } from '@/lib/use-cookie-preferences'
-import type { CookieConsent } from '@/lib/schemas'
 
 export interface CookiePreferencesModalProps {
   isOpen: boolean
@@ -62,7 +62,7 @@ export function CookiePreferencesModal({ isOpen, onClose }: CookiePreferencesMod
   async function handleSave() {
     setIsSaving(true)
     try {
-      const res = await postJson('/api/cookie-consent', prefs)
+      const res = await postJson('/cookie-consent', prefs)
       if (res.ok) {
         save(prefs)
         onClose()

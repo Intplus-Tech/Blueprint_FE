@@ -5,15 +5,15 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/api-client'
 
-export default function GoogleCallbackPage() {
+export default function DropboxCallbackPage() {
   return (
-    <Suspense fallback={<GoogleCallbackLoading />}>
-      <GoogleCallbackContent />
+    <Suspense fallback={<DropboxCallbackLoading />}>
+      <DropboxCallbackContent />
     </Suspense>
   )
 }
 
-function GoogleCallbackContent() {
+function DropboxCallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
@@ -22,36 +22,36 @@ function GoogleCallbackContent() {
     const code = searchParams.get('code')
 
     if (!code) {
-      setError('Google authentication did not return an authorization code.')
+      setError('Dropbox authentication did not return an authorization code.')
       return
     }
 
     const authCode = code
     let cancelled = false
 
-    async function completeGoogleLogin() {
+    async function completeDropbox() {
       try {
-        const callbackUrl = new URL(getBackendUrl('/auth/google/callback'))
+        const callbackUrl = new URL(getBackendUrl('/auth/dropbox/callback'))
         callbackUrl.searchParams.set('code', authCode)
         const res = await fetch(callbackUrl.toString())
 
         if (!res.ok) {
           const payload = await res.json().catch(() => null)
-          throw new Error(payload?.message ?? 'Google login failed.')
+          throw new Error(payload?.message ?? 'Dropbox login failed.')
         }
 
         if (!cancelled) {
           router.replace('/dashboard')
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Google login failed.'
+        const message = err instanceof Error ? err.message : 'Dropbox login failed.'
         if (!cancelled) {
           setError(message)
         }
       }
     }
 
-    void completeGoogleLogin()
+    void completeDropbox()
 
     return () => {
       cancelled = true
@@ -62,7 +62,7 @@ function GoogleCallbackContent() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <div className="max-w-md rounded-xl border border-red-200 bg-white p-6 text-center shadow-sm">
-          <h1 className="text-xl font-semibold text-slate-900">Google sign-in failed</h1>
+          <h1 className="text-xl font-semibold text-slate-900">Dropbox sign-in failed</h1>
           <p className="mt-3 text-sm text-slate-600">{error}</p>
           <button
             type="button"
@@ -76,15 +76,15 @@ function GoogleCallbackContent() {
     )
   }
 
-  return <GoogleCallbackLoading />
+  return <DropboxCallbackLoading />
 }
 
-function GoogleCallbackLoading() {
+function DropboxCallbackLoading() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
         <Loader2 className="h-8 w-8 animate-spin text-slate-900" />
-        <h1 className="text-lg font-semibold text-slate-900">Finishing Google sign-in</h1>
+        <h1 className="text-lg font-semibold text-slate-900">Finishing Dropbox sign-in</h1>
         <p className="text-sm text-slate-600">Please wait while we complete your login.</p>
       </div>
     </div>

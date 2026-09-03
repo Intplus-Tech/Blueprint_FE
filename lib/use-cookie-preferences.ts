@@ -7,8 +7,8 @@ import {
   clearCookiePreferences,
   isCookieTypeAllowed,
   areCookiePreferencesExpired,
+  type CookieConsent,
 } from '@/lib/cookie-preferences'
-import type { CookieConsent } from '@/lib/schemas'
 
 export interface UseCookiePreferencesReturn {
   preferences: CookieConsent | null

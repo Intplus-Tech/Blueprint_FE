@@ -5,7 +5,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { postJson } from '@/lib/api-client'
+import { getBackendUrl, postJson } from '@/lib/api-client'
 
 function getGoogleSessionUser() {
   if (typeof window === 'undefined') {
@@ -34,7 +34,7 @@ export function GoogleOneTap({ onClose }: { onClose: () => void }) {
     const user = getGoogleSessionUser()
 
     try {
-      const res = await fetch('/api/auth/google/url')
+      const res = await fetch(getBackendUrl('/auth/google/auth-url'))
       if (res.ok) {
         const payload = await res.json().catch(() => null)
         const data = payload?.data ?? payload

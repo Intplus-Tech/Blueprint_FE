@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { getBackendUrl } from '@/lib/api-client'
 
 export interface SubscriptionStatus {
   isAuthenticated: boolean
@@ -32,7 +33,7 @@ export function useSubscriptionStatus(): SubscriptionStatus {
 
     async function fetchSubscriptionStatus() {
       try {
-        const res = await fetch('/api/session')
+        const res = await fetch(getBackendUrl('/session'))
         if (!res.ok) {
           if (!cancelled) {
             setStatus({

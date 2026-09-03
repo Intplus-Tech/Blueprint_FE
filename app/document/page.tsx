@@ -13,7 +13,10 @@ import { ToolInfoPopover } from "@/components/tool-info-popover";
 import { NewDocumentPanel, AddSignerPanel, AIReviewPanel, ApprovalWatermark, type Signer } from "@/components/document-panels";
 import { inviteCoSigner } from '@/lib/blueprint-api'
 import { createNotification } from '@/lib/notifications'
+import { useNotifications } from '@/lib/use-notifications'
 import { AITorneyChat } from "@/components/ai-torney-chat";
+import { NotificationWidget } from "@/components/notification-widget";
+import { NotificationCenter } from "@/components/notification-center";
 import { PdfPageCanvas } from "@/components/pdf-page-canvas";
 import { TrialGateModal } from "@/components/trial-gate-modal";
 import { getPdfjs, PDF_STORAGE_KEY, PDF_NAME_KEY, type PdfDocumentProxy } from "@/lib/pdf";
@@ -45,7 +48,9 @@ function DocumentPageInner() {
   const [placed, setPlaced] = useState<PlacedSignature | null>(null);
   const [isDraggingSignature, setIsDraggingSignature] = useState(false);
   const [signers, setSigners] = useState<Signer[]>([]);
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
   const pageRef = useRef<HTMLDivElement>(null);
+  const { unreadCount } = useNotifications();
 
   const [pdfDoc, setPdfDoc] = useState<PdfDocumentProxy | null>(null);
   const [pdfNumPages, setPdfNumPages] = useState(0);
@@ -116,7 +121,12 @@ function DocumentPageInner() {
   }
 
   function handleAddSigner(signer: Omit<Signer, "id" | "status">) {
-    setSigners((prev) => [...prev, { ...signer, id: crypto.randomUUID(), status: "Pending" }]);
+    const newSigner = { ...signer, id: crypto.randomUUID(), status: "Pending" as const };
+    setSigners((prev) => [...prev, newSigner]);
+    createNotification.document(
+      'Signer added',
+      `${newSigner.firstName} ${newSigner.lastName || ''}`.trim() || newSigner.email || 'The signer was added to this document.'
+    );
   }
 
   function handleResendInvite(id: string) {
@@ -142,10 +152,12 @@ function DocumentPageInner() {
 
   function handleNewDocumentSelected(fileName: string) {
     console.log("New document selected:", fileName);
+    createNotification.document('Document ready', `${fileName} is ready for review and signing.`);
     setActiveTool(null);
   }
 
   function handleStartAIReview() {
+    createNotification.document('AI review started', 'The document review is now running and will show findings shortly.');
     setAiReviewStage("watermark");
     setTimeout(() => {
       setAiReviewStage("chat");
@@ -177,9 +189,13 @@ function DocumentPageInner() {
         {isAuthenticated ? (
           <div className="flex items-center gap-3 text-white/80">
             <button type="button" className="hover:text-white" aria-label="Settings"><Settings className="h-4 w-4" /></button>
-            <button type="button" className="relative hover:text-white" aria-label="Notifications">
+            <button type="button" onClick={() => setNotificationCenterOpen(!notificationCenterOpen)} className="relative hover:text-white" aria-label="Notifications">
               <Bell className="h-4 w-4" />
-              <span className="absolute -right-1.5 -top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[9px] font-medium text-white">3</span>
+              {unreadCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[9px] font-medium text-white">
+                  {unreadCount}
+                </span>
+              )}
             </button>
             <Link href="/login" className="hover:text-white" aria-label="Log out"><LogOut className="h-4 w-4" /></Link>
           </div>
@@ -193,6 +209,9 @@ function DocumentPageInner() {
       </header>
 
       <div className="px-4 py-2 text-xs text-gray-500 sm:px-6">{breadcrumb}</div>
+
+      <NotificationWidget position="top-right" maxVisible={3} />
+      <NotificationCenter isOpen={notificationCenterOpen} onClose={() => setNotificationCenterOpen(false)} />
 
       {gateFeature && (
         <TrialGateModal

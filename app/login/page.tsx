@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
-import { loginUser, persistAuthSession } from "@/lib/api-client";
+import { getBackendUrl, loginUser, persistAuthSession } from "@/lib/api-client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -49,7 +49,7 @@ export default function LoginPage() {
 
   async function handleGoogleLogin() {
     try {
-      const res = await fetch('/api/auth/google/url')
+      const res = await fetch(getBackendUrl('/auth/google/auth-url'))
       if (!res.ok) {
         throw new Error('Failed to get Google auth URL')
       }

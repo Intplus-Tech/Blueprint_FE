@@ -3,7 +3,11 @@
  * The backend owns consent state; this frontend module is an explicit no-op.
  */
 
-import type { CookieConsent } from '@/lib/schemas'
+export type CookieConsent = {
+  essentials: true
+  marketing: boolean
+  externalMedia: boolean
+}
 
 export interface CookiePreferences extends CookieConsent {
   timestamp?: number
