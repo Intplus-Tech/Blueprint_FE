@@ -62,12 +62,14 @@ export function NewDocumentPanel({ onSelected }: { onSelected: (fileName: string
 /* Add Signer — authenticated co-signer form                          */
 /* ------------------------------------------------------------------ */
 
+export type SignerStatusValue = "Pending" | "Signed" | "Not Signed";
+
 export type Signer = {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
-  status: "Pending" | "Signed";
+  status?: string | boolean;
 };
 
 export function AddSignerPanel({
@@ -109,7 +111,6 @@ export function AddSignerPanel({
       if (!addMore) onClose();
     } catch (error) {
       console.error("Failed to create signer invite:", error)
-      onAddSigner(payload)
       if (!addMore) onClose();
     } finally {
       setIsSending(false)
@@ -129,28 +130,40 @@ export function AddSignerPanel({
 
       {signers.length > 0 && (
         <div className="mb-3 space-y-1.5 border-b border-gray-100 pb-3">
-          {signers.map((s, i) => (
-            <div key={s.id} className="rounded-md bg-gray-50 px-2.5 py-1.5 text-xs">
-              <div className="mb-0.5 flex items-center justify-between">
-                <span className="font-semibold text-gray-700">Signer {i + 1}</span>
-                <span
-                  className={cn(
-                    "rounded-full px-2 py-0.5 font-medium",
-                    s.status === "Signed" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+          {signers.map((s, i) => {
+            // Expect backend to provide a normalized `status` string ("Signed" | "Pending" | "Not Signed").
+            // Fall back to a simple string coercion if absent.
+            const status = typeof s.status === 'string' && s.status ? s.status : 'Pending';
+
+            return (
+              <div key={s.id} className="rounded-md bg-gray-50 px-2.5 py-1.5 text-xs">
+                <div className="mb-0.5 flex items-center justify-between">
+                  <span className="font-semibold text-gray-700">Signer {i + 1}</span>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 font-medium",
+                      status === "Signed"
+                        ? "bg-green-100 text-green-700"
+                        : status === "Pending"
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-red-100 text-red-700"
+                    )}
+                  >
+                    {status}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-gray-500">
+                  <span>{s.firstName} {s.lastName}</span>
+                  {status === "Pending" && (
+                    <button type="button" onClick={() => onResend(s.id)} className="font-medium text-brand-600 hover:text-brand-700">
+                      Resend Invite
+                    </button>
                   )}
-                >
-                  {s.status}
-                </span>
+                </div>
+                <div className="text-gray-400">{s.email}</div>
               </div>
-              <div className="flex items-center justify-between text-gray-500">
-                <span>{s.firstName} {s.lastName}</span>
-                <button type="button" onClick={() => onResend(s.id)} className="font-medium text-brand-600 hover:text-brand-700">
-                  Resend Invite
-                </button>
-              </div>
-              <div className="text-gray-400">{s.email}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

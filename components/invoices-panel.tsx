@@ -139,7 +139,7 @@ function EditorsPanel() {
               {invoiceInfo.signature ? (
                 <img src={invoiceInfo.signature} alt="Signature" className="h-full object-contain" />
               ) : (
-                <span className="font-serif text-sm italic text-gray-400">Jon Snow</span>
+                <span className="text-[10px] text-gray-400">Upload signature</span>
               )}
             </div>
           </div>

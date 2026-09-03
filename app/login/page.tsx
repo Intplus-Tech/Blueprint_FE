@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
+import { getBackendUrl, loginUser, persistAuthSession } from "@/lib/api-client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,10 +31,17 @@ export default function LoginPage() {
 
     setIsSubmitting(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      const payload = { email: email.trim(), password };
+      const response = await loginUser(payload);
+
+      const responseData = response?.data ?? response;
+      persistAuthSession(responseData);
+
       router.push("/dashboard");
-    } catch {
-      setError("We couldn't log you in. Check your details and try again.");
+    } catch (err: any) {
+      const serverMessage = err?.response?.data?.message || err?.response?.data?.error;
+      const fallback = err?.message || "We couldn't log you in. Check your details and try again.";
+      setError(serverMessage || fallback);
     } finally {
       setIsSubmitting(false);
     }
@@ -41,7 +49,7 @@ export default function LoginPage() {
 
   async function handleGoogleLogin() {
     try {
-      const res = await fetch('/api/auth/google/url')
+      const res = await fetch(getBackendUrl('/auth/google/auth-url'))
       if (!res.ok) {
         throw new Error('Failed to get Google auth URL')
       }
@@ -50,22 +58,14 @@ export default function LoginPage() {
       const url = payload?.data?.authUrl ?? payload?.data?.url ?? payload?.url ?? payload?.authUrl
 
       if (typeof url === 'string' && url.trim()) {
-        localStorage.setItem('bp-google-user', JSON.stringify({
-          name: 'Google User',
-          email: 'google-user@example.com',
-        }))
         window.location.href = url
         return
       }
 
-      router.push('/dashboard')
+      setError('Google authentication is currently unavailable. Please try again later.')
     } catch (error) {
       console.error('Google login failed:', error)
-      localStorage.setItem('bp-google-user', JSON.stringify({
-        name: 'Google User',
-        email: 'google-user@example.com',
-      }))
-      router.push('/dashboard')
+      setError('Google authentication failed. Please try again later.')
     }
   }
 

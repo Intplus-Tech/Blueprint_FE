@@ -7,6 +7,36 @@ import { useSubscriptionStatus, getTrialExpirationStatus } from '@/lib/use-subsc
 import { initiatePaystackCheckout } from '@/lib/subscription-client'
 import type { Invoice } from '@/lib/invoice-types'
 
+function unwrapPaystackPayload(response: unknown) {
+  if (!response || typeof response !== 'object') return null
+
+  const source = 'data' in response && response.data && typeof response.data === 'object'
+    ? (response.data as Record<string, unknown>)
+    : (response as Record<string, unknown>)
+
+  if (source && 'data' in source && source.data && typeof source.data === 'object') {
+    return source.data as Record<string, unknown>
+  }
+
+  return source
+}
+
+function getPaystackRedirectUrl(response: unknown) {
+  const payload = unwrapPaystackPayload(response)
+  if (!payload || typeof payload !== 'object') return null
+
+  const url = payload.authorizationUrl ?? payload.authorization_url ?? payload.checkoutUrl ?? payload.checkout_url
+  return typeof url === 'string' && url.trim() ? url : null
+}
+
+function getPaystackReference(response: unknown) {
+  const payload = unwrapPaystackPayload(response)
+  if (!payload || typeof payload !== 'object') return null
+
+  const ref = payload.reference ?? payload.paymentReference
+  return typeof ref === 'string' && ref.trim() ? ref : null
+}
+
 export interface InvoicePanelHeaderProps {
   onNewInvoice?: () => void
 }
@@ -100,18 +130,20 @@ export function InvoicePanelHeader({ onNewInvoice }: InvoicePanelHeaderProps) {
             <Button
               onClick={async () => {
                 const res = await initiatePaystackCheckout({ plan: 'monthly', amount: subscription.subscriptionAmount ?? 2000 })
-                if (res.ok && res.data && typeof res.data === 'object' && 'checkoutUrl' in (res.data as any)) {
-                  const url = (res.data as any).checkoutUrl
-                  if (typeof url === 'string') window.location.href = url
-                } else if (res.ok && res.data && typeof res.data === 'object' && 'reference' in (res.data as any)) {
-                  // backend returned a reference to open hosted page
-                  const ref = (res.data as any).reference
-                  // open backend-hosted checkout if provided
-                  window.location.href = `/auth/checkout?ref=${encodeURIComponent(ref)}`
-                } else {
-                  // fallback: open dashboard to manage subscription
-                  window.location.href = '/authenticated-dashboard'
+                const redirectUrl = getPaystackRedirectUrl(res)
+
+                if (redirectUrl) {
+                  window.location.href = redirectUrl
+                  return
                 }
+
+                const reference = getPaystackReference(res)
+                if (reference) {
+                  window.location.href = `/authenticated-dashboard?reference=${encodeURIComponent(reference)}`
+                  return
+                }
+
+                window.location.href = '/authenticated-dashboard'
               }}
               variant="outline"
               className="px-3"

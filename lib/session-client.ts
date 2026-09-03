@@ -1,15 +1,11 @@
-export type SessionInfo = {
-  user?: { id: string; email?: string; name?: string; role?: string }
-  isAuthenticated?: boolean
-}
+import { getBackendUrl } from './api-client'
 
-export async function getSession(): Promise<SessionInfo | null> {
+export async function getSession(): Promise<Record<string, unknown> | null> {
   try {
-    const res = await fetch('/api/session')
+    const res = await fetch(getBackendUrl('/session'))
     if (!res.ok) return null
     const payload = await res.json()
-    // payload.data is whatever backend returned; normalize
-    if (payload && payload.data) return payload.data as SessionInfo
+    if (payload && payload.data) return payload.data as Record<string, unknown>
     return null
   } catch (err) {
     console.error('getSession error', err)

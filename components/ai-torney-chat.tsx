@@ -18,7 +18,7 @@ const QUICK_START = [
 ];
 
 function getCannedReply(prompt: string): string {
-  return `I couldn’t generate a live review for this prompt yet. Please connect the AI review endpoint to return a real response.`;
+  return `I couldn't generate a live review for this prompt right now. Please try again in a moment.`;
 }
 
 export function AITorneyChat({ onClose }: { onClose: () => void }) {
@@ -37,7 +37,13 @@ export function AITorneyChat({ onClose }: { onClose: () => void }) {
 
     try {
       const result = await reviewDocument(trimmed)
-      const answer = result?.data?.answer || result?.data?.summary || getCannedReply(trimmed)
+      const nested = (result?.data && typeof result.data === 'object') ? result.data as Record<string, unknown> : {}
+      const answer =
+        (typeof nested.answer === 'string' ? nested.answer : '') ||
+        (typeof nested.summary === 'string' ? nested.summary : '') ||
+        (typeof nested.message === 'string' ? nested.message : '') ||
+        getCannedReply(trimmed)
+
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", text: answer }]);
     } catch {
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", text: getCannedReply(trimmed) }]);

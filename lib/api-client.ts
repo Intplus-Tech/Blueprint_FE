@@ -2,9 +2,40 @@
 
 import axios from 'axios'
 
+export function getBackendBaseUrl() {
+  return (process.env.NEXT_PUBLIC_BACKEND_API_URL || process.env.BACKEND_API_URL || 'http://localhost:5000/api/v1').replace(/\/$/, '')
+}
+
+export function getBackendUrl(path: string) {
+  const endpoint = path.trim()
+  if (!endpoint) return getBackendBaseUrl()
+  if (/^https?:\/\//i.test(endpoint)) return endpoint
+
+  const normalizedPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  const baseUrl = getBackendBaseUrl()
+  const apiV1Base = baseUrl.replace(/\/api\/v1\/?$/, '/api/v1')
+  const apiRootBase = baseUrl.replace(/\/api\/v1\/?$/, '/api')
+  const rootBase = baseUrl.replace(/\/api\/v1\/?$/, '')
+
+  // Backend-specific routes that do not live under /api/v1.
+  if (normalizedPath === '/session') return `${apiRootBase}/session`
+  if (normalizedPath === '/cookie-consent') return `${rootBase}/cookie-consent`
+  if (normalizedPath === '/health') return `${rootBase}/health`
+
+  if (normalizedPath.startsWith('/api/v1')) {
+    return `${apiV1Base}${normalizedPath.replace(/^\/api\/v1/, '')}`
+  }
+
+  if (normalizedPath.startsWith('/api/')) {
+    return `${apiRootBase}${normalizedPath.replace(/^\/api/, '')}`
+  }
+
+  return `${apiV1Base}${normalizedPath}`
+}
+
 // Axios instance with default configuration
 export const axiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1',
+  baseURL: getBackendBaseUrl(),
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -21,14 +52,15 @@ axiosInstance.interceptors.response.use(
   },
 )
 
-/** POSTs JSON to a local route handler and returns the parsed response. */
+/** POSTs JSON to the backend API and returns the parsed response. */
 export async function postJson<T>(
   url: string,
   payload: T,
 ): Promise<{ ok: boolean; status: number; data: unknown }> {
-  const res = await fetch(url, {
+  const res = await fetch(getBackendUrl(url), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(payload),
   })
   const data = await res.json().catch(() => null)
@@ -38,26 +70,6 @@ export async function postJson<T>(
 // ============ Cloud Storage Integration ============
 
 export type CloudProvider = 'google-drive' | 'dropbox' | 'onedrive' | 'local'
-
-export interface UploadResponse {
-  id: string
-  publicId: string
-  fileName: string
-  fileSize: number
-  fileType: string
-  uploadedAt: string
-  downloadUrl?: string
-}
-
-export interface CloudFile {
-  id: string
-  name: string
-  type: 'file' | 'folder'
-  size?: number
-  modifiedTime?: string
-  mimeType?: string
-  downloadUrl?: string
-}
 
 /** Upload file to backend */
 export async function uploadFile(file: File, metadata?: Record<string, any>) {
@@ -71,7 +83,7 @@ export async function uploadFile(file: File, metadata?: Record<string, any>) {
     const response = await axiosInstance.post('/uploads', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
-    return response.data as UploadResponse
+    return response.data
   } catch (error) {
     console.error('Failed to upload file:', error)
     throw error
@@ -100,6 +112,28 @@ export async function getGoogleAuthUrl() {
   }
 }
 
+/** Get OneDrive auth URL */
+export async function getOneDriveAuthUrl() {
+  try {
+    const response = await axiosInstance.get('/auth/onedrive/auth-url')
+    return response.data
+  } catch (error) {
+    console.error('Failed to get OneDrive auth URL:', error)
+    throw error
+  }
+}
+
+/** Get Dropbox auth URL */
+export async function getDropboxAuthUrl() {
+  try {
+    const response = await axiosInstance.get('/auth/dropbox/auth-url')
+    return response.data
+  } catch (error) {
+    console.error('Failed to get Dropbox auth URL:', error)
+    throw error
+  }
+}
+
 /** Handle Google OAuth callback */
 export async function handleGoogleCallback(code: string) {
   try {
@@ -113,11 +147,26 @@ export async function handleGoogleCallback(code: string) {
   }
 }
 
+/** Persistence to localStorage has been removed for privacy reasons. */
+export function persistAuthSession(_payload: any) {
+  if (typeof window === 'undefined') return
+  // intentionally no-op: storage persistence disabled
+  console.warn('persistAuthSession: localStorage persistence disabled')
+}
+
+export function clearAuthSession() {
+  if (typeof window === 'undefined') return
+  // intentionally no-op: storage persistence disabled
+  console.warn('clearAuthSession: localStorage persistence disabled')
+}
+
 /** Register user */
 export async function registerUser(data: {
+  fullName: string
   email: string
+  industry: string
   password: string
-  name?: string
+  role?: string
 }) {
   try {
     const response = await axiosInstance.post('/auth/register', data)

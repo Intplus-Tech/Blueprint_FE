@@ -13,8 +13,14 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { postJson } from '@/lib/api-client'
 import { storePdfFile } from '@/lib/pdf'
-import type { UploadPayload } from '@/lib/schemas'
 import { useRouter } from 'next/navigation'
+
+type UploadPayload = {
+  fileName: string
+  size?: number
+  type?: string
+  source: 'device' | 'gdrive' | 'onedrive' | 'dropbox'
+}
 
 type SourceId = UploadPayload['source']
 
@@ -66,7 +72,7 @@ function PdfIcon() {
 }
 
 async function registerUpload(payload: UploadPayload) {
-  const res = await postJson('/api/upload', payload)
+  const res = await postJson('/uploads', payload)
   if (res.ok) {
     toast.success('File ready', { description: payload.fileName })
   } else {
@@ -81,23 +87,26 @@ export function UploadDropzone() {
   const [fileName, setFileName] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  function handleFile(file: File, source: SourceId) {
+  async function handleFile(file: File, source: SourceId) {
     setFileName(file.name)
-    // Store the file locally so the document viewer can render it
-    void storePdfFile(file)
-    // Mark user as guest for client-side gating
+
     try {
-      document.cookie = `bp-role=guest; max-age=${60 * 60 * 24}; path=/`
-    } catch (e) {
-      // ignore in non-browser contexts
+      // Store the file locally before routing so the document viewer sees the PDF
+      // data immediately on the next page instead of racing with navigation.
+      await storePdfFile(file)
+    } catch (error) {
+      console.error('Failed to store PDF for preview:', error)
+      toast.error('Unable to preview this document', { description: 'Please try uploading it again.' })
+      return
     }
+
     void registerUpload({
       fileName: file.name,
       size: file.size,
       type: file.type,
       source,
     })
-    // Navigate to document viewer in guest mode
+
     router.push('/document?from=guest')
   }
 
