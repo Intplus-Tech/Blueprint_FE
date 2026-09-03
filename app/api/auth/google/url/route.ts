@@ -10,7 +10,10 @@ export async function GET(request: NextRequest) {
         method: 'GET',
         query: Object.fromEntries(request.nextUrl.searchParams.entries()),
       })
-      return NextResponse.json({ ok: true, forwarded: result.forwarded, data: result.data })
+      // Backend returns { message, data: { url } }, extract the url
+      const backendData = result.data as { data?: { url?: string }; url?: string }
+      const authUrl = backendData?.data?.url || backendData?.url
+      return NextResponse.json({ ok: true, data: { url: authUrl } })
     }
     return NextResponse.json({ error: 'Auth backend not configured' }, { status: 503 })
   } catch (err) {

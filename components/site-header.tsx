@@ -8,27 +8,40 @@ type SiteHeaderProps = {
 
 export function SiteHeader({ onNavClick }: SiteHeaderProps) {
   return (
-    <header className="flex items-center justify-between px-5 py-5 sm:px-10 sm:py-7">
-      <Logo variant="horizontal" size="lg" onDark />
-      <nav aria-label="Account" className="flex items-center gap-2 text-sm text-white sm:text-base">
-        <button
-          type="button"
-          onClick={() => onNavClick('Sign Up')}
-          className="rounded-sm px-1 transition-colors hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+    <header className="relative z-20 w-full">
+      <div className="mx-auto flex w-full items-center justify-between px-4 py-5 sm:py-7">
+        <div className="flex flex-1 items-center pl-0">
+          <Logo
+            variant="horizontal"
+            size="lg"
+            onDark
+            className="w-[172px] drop-shadow-[0_0_12px_rgba(130,188,255,0.18)] sm:w-[220px] lg:w-[250px]"
+          />
+        </div>
+
+        <nav
+          aria-label="Account"
+          className="ml-auto flex items-center gap-1.5 text-sm font-medium tracking-[0.02em] text-white/90 sm:gap-2 sm:text-[17px]"
         >
-          Sign Up
-        </button>
-        <span aria-hidden="true" className="text-white/50">
-          /
-        </span>
-        <button
-          type="button"
-          onClick={() => onNavClick('Sign In')}
-          className="rounded-sm px-1 transition-colors hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
-        >
-          Sign In
-        </button>
-      </nav>
+          <button
+            type="button"
+            onClick={() => onNavClick('Sign Up')}
+            className="rounded-sm px-1 py-0.5 transition-colors duration-200 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+          >
+            Sign Up
+          </button>
+          <span aria-hidden="true" className="select-none text-white/40">
+            /
+          </span>
+          <button
+            type="button"
+            onClick={() => onNavClick('Sign In')}
+            className="rounded-sm px-1 py-0.5 transition-colors duration-200 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+          >
+            Sign In
+          </button>
+        </nav>
+      </div>
     </header>
   )
 }
