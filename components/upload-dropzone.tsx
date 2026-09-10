@@ -14,6 +14,7 @@ import {
 import { postJson } from '@/lib/api-client'
 import { storePdfFile } from '@/lib/pdf'
 import { useRouter } from 'next/navigation'
+import { CloudStorageSelector } from '@/components/cloud-storage-selector'
 
 type UploadPayload = {
   fileName: string
@@ -106,18 +107,29 @@ export function UploadDropzone() {
       type: file.type,
       source,
     })
-
     router.push('/document?from=guest')
   }
+
+  const [showCloudSelector, setShowCloudSelector] = useState<null | SourceId>(null)
 
   function handleSource(source: Source) {
     if (source.id === 'device') {
       inputRef.current?.click()
-    } else {
-      setFileName(`Connecting to ${source.label}...`)
-      toast.info(`Connecting to ${source.label}`)
-      void registerUpload({ fileName: `${source.label} file`, source: source.id })
+      return
     }
+
+    // Open the cloud storage selector for provider flows (real connector)
+    setFileName(`Connecting to ${source.label}...`)
+    setShowCloudSelector(source.id)
+  }
+
+  function handleCloudFileSelected(response: any) {
+    setShowCloudSelector(null)
+    const name = response?.data?.fileName ?? response?.fileName ?? response?.data?.name ?? response?.name ?? response?.data?.url?.split('/').pop()
+    if (name) setFileName(String(name))
+
+    // Optionally register the remote file with backend for tracking
+    void registerUpload({ fileName: String(name ?? `${response?.data?.url ?? 'file'}`), source: (response?.source as SourceId) ?? 'gdrive' })
   }
 
   function onDrop(e: React.DragEvent) {
@@ -199,6 +211,12 @@ export function UploadDropzone() {
         </p>
       ) : (
         <p className="text-sm text-white/90">Drag your files here</p>
+      )}
+
+      {showCloudSelector && (
+        <div className="w-full mt-4">
+          <CloudStorageSelector onFileSelected={handleCloudFileSelected} onClose={() => setShowCloudSelector(null)} />
+        </div>
       )}
     </motion.div>
   )

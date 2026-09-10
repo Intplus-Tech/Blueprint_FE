@@ -177,6 +177,19 @@ export async function registerUser(data: {
   }
 }
 
+/** Verify a user email using the token emailed to them. */
+export async function verifyEmail(token: string) {
+  try {
+    const response = await axiosInstance.get('/auth/verify-email', {
+      params: { token },
+    })
+    return response.data
+  } catch (error) {
+    console.error('Email verification failed:', error)
+    throw error
+  }
+}
+
 /** Login user */
 export async function loginUser(data: { email: string; password: string }) {
   try {

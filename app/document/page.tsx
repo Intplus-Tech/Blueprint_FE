@@ -18,7 +18,7 @@ import { AITorneyChat } from "@/components/ai-torney-chat";
 import { NotificationWidget } from "@/components/notification-widget";
 import { NotificationCenter } from "@/components/notification-center";
 import { PdfPageCanvas } from "@/components/pdf-page-canvas";
-import { TrialGateModal } from "@/components/trial-gate-modal";
+import { TrialGateModal, useTrialGate } from "@/components/trial-gate-modal";
 import { getPdfjs, PDF_STORAGE_KEY, PDF_NAME_KEY, type PdfDocumentProxy } from "@/lib/pdf";
 
 const FALLBACK_PAGE_COUNT = 1;
@@ -39,9 +39,11 @@ function DocumentPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const isAuthenticated = searchParams.get("from") === "dashboard";
+  const isGuest = searchParams.get("from") === "guest";
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [gateFeature, setGateFeature] = useState<"ai-review" | "cosign" | null>(null);
+  const aiGate = useTrialGate('ai-review')
+  const cosignGate = useTrialGate('cosign')
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
   const [panelTab, setPanelTab] = useState<string>("history");
   const [savedSignatures, setSavedSignatures] = useState<SavedSignature[]>([]);
@@ -87,9 +89,49 @@ function DocumentPageInner() {
     return () => { active = false; };
   }, []);
 
+  // If user arrived as a guest, attempt to restore any guest-saved signatures.
+  useEffect(() => {
+    if (!isGuest) return;
+    try {
+      const raw = sessionStorage.getItem("bp_guest_signatures");
+      if (raw) {
+        const parsed = JSON.parse(raw) as SavedSignature[];
+        if (Array.isArray(parsed)) setSavedSignatures(parsed);
+      }
+      const placedRaw = sessionStorage.getItem("bp_guest_placed");
+      if (placedRaw) {
+        const p = JSON.parse(placedRaw) as PlacedSignature;
+        if (p && typeof p.x === "number") setPlaced(p);
+      }
+    } catch (err) {
+      console.error("Failed to restore guest session:", err);
+    }
+  }, [isGuest]);
+
+  // Persist guest signatures when they change so guests can reload the page.
+  useEffect(() => {
+    if (!isGuest) return;
+    try {
+      sessionStorage.setItem("bp_guest_signatures", JSON.stringify(savedSignatures));
+    } catch (err) {
+      console.error("Failed to persist guest signatures:", err);
+    }
+  }, [isGuest, savedSignatures]);
+
+  useEffect(() => {
+    if (!isGuest) return;
+    try {
+      if (placed) sessionStorage.setItem("bp_guest_placed", JSON.stringify(placed));
+      else sessionStorage.removeItem("bp_guest_placed");
+    } catch (err) {
+      console.error("Failed to persist guest placed signature:", err);
+    }
+  }, [isGuest, placed]);
+
   const pageCount = pdfDoc ? pdfNumPages : FALLBACK_PAGE_COUNT;
   const signaturePanelOpen = activeTool === "signature";
   const [aiReviewStage, setAiReviewStage] = useState<"confirm" | "watermark" | "chat">("confirm");
+  const [aiReviewInitialResult, setAiReviewInitialResult] = useState<string | null>(null);
 
   function handleToolClick(tool: ToolId) {
     if (tool === "download") {
@@ -98,12 +140,12 @@ function DocumentPageInner() {
     }
 
     if (tool === "cosigner" && !isAuthenticated) {
-      setGateFeature("cosign");
+      cosignGate.openGate()
       return;
     }
 
     if (tool === "aiReview" && !isAuthenticated) {
-      setGateFeature("ai-review");
+      aiGate.openGate()
       return;
     }
 
@@ -120,8 +162,14 @@ function DocumentPageInner() {
     setSavedSignatures((prev) => prev.filter((s) => s.id !== id));
   }
 
-  function handleAddSigner(signer: Omit<Signer, "id" | "status">) {
-    const newSigner = { ...signer, id: crypto.randomUUID(), status: "Pending" as const };
+  function handleAddSigner(signer: { firstName: string; lastName: string; email: string; id?: string; status?: string }) {
+    const newSigner = {
+      firstName: signer.firstName,
+      lastName: signer.lastName,
+      email: signer.email,
+      id: signer.id ?? crypto.randomUUID(),
+      status: signer.status ?? "Pending",
+    } as Signer;
     setSigners((prev) => [...prev, newSigner]);
     createNotification.document(
       'Signer added',
@@ -156,17 +204,26 @@ function DocumentPageInner() {
     setActiveTool(null);
   }
 
-  function handleStartAIReview() {
+  function handleStartAIReview(reviewResult?: Record<string, any>) {
     createNotification.document('AI review started', 'The document review is now running and will show findings shortly.');
+    setAiReviewInitialResult(null);
     setAiReviewStage("watermark");
     setTimeout(() => {
       setAiReviewStage("chat");
+      if (reviewResult) {
+        const summary = typeof reviewResult.summary === 'string' ? reviewResult.summary : '';
+        const answer = typeof reviewResult.answer === 'string' ? reviewResult.answer : summary || (typeof reviewResult.message === 'string' ? reviewResult.message : '');
+        if (answer) {
+          setAiReviewInitialResult(answer);
+        }
+      }
     }, 1600); 
   }
 
   function handleCloseAIReview() {  
     setActiveTool(null);
     setAiReviewStage("confirm");
+    setAiReviewInitialResult(null);
   } 
 
   const breadcrumb = getBreadcrumb({
@@ -208,24 +265,58 @@ function DocumentPageInner() {
         )}
       </header>
 
+      {/* Guest banner removed per request */}
+
       <div className="px-4 py-2 text-xs text-gray-500 sm:px-6">{breadcrumb}</div>
 
       <NotificationWidget position="top-right" maxVisible={3} />
       <NotificationCenter isOpen={notificationCenterOpen} onClose={() => setNotificationCenterOpen(false)} />
 
-      {gateFeature && (
-        <TrialGateModal
-          feature={gateFeature}
-          isActive={true}
-          onAccept={() => router.push("/login")}
-          onDismiss={() => {
-            setGateFeature(null);
-            setActiveTool(null);
-          }}
-          trialDaysRemaining={30}
-          subscriptionRequired={false}
-        />
-      )}
+      <TrialGateModal
+        feature="ai-review"
+        isActive={aiGate.isOpen}
+        onAccept={() => {
+          if (!aiGate.isAuthenticated) {
+            router.push('/login')
+            return
+          }
+          if (!aiGate.isSubscribed) {
+            aiGate.startCheckout()
+            return
+          }
+          aiGate.closeGate()
+          setActiveTool('aiReview')
+        }}
+        onDismiss={() => {
+          aiGate.closeGate()
+          setActiveTool(null)
+        }}
+        trialDaysRemaining={aiGate.trialDaysRemaining}
+        subscriptionRequired={!aiGate.isSubscribed}
+      />
+
+      <TrialGateModal
+        feature="cosign"
+        isActive={cosignGate.isOpen}
+        onAccept={() => {
+          if (!cosignGate.isAuthenticated) {
+            router.push('/login')
+            return
+          }
+          if (!cosignGate.isSubscribed) {
+            cosignGate.startCheckout()
+            return
+          }
+          cosignGate.closeGate()
+          setActiveTool('cosigner')
+        }}
+        onDismiss={() => {
+          cosignGate.closeGate()
+          setActiveTool(null)
+        }}
+        trialDaysRemaining={cosignGate.trialDaysRemaining}
+        subscriptionRequired={!cosignGate.isSubscribed}
+      />
 
       <div className="relative flex flex-1 gap-4 overflow-hidden p-4 sm:p-6">
         <aside className="hidden w-32 shrink-0 space-y-4 overflow-y-auto sm:block">
@@ -323,7 +414,7 @@ function DocumentPageInner() {
               ) : aiReviewStage === "watermark" ? (
                 <ApprovalWatermark />
               ) : aiReviewStage === "chat" ? (
-                <AITorneyChat onClose={handleCloseAIReview} />
+                <AITorneyChat onClose={handleCloseAIReview} initialReview={aiReviewInitialResult ?? undefined} />
               ) : (
                 <ToolInfoPopover title="AI Review">Review and get recommendation about your document from our AI.</ToolInfoPopover>
               )

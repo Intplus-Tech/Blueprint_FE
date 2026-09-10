@@ -3,6 +3,7 @@
 import { X, Pencil, Save, Mail, Download, Phone, AtSign } from "lucide-react";
 import { invoiceTotal, type Invoice } from "@/lib/invoice-types";
 import { saveInvoice } from "@/lib/blueprint-api";
+import { TrialGateModal, useTrialGate } from "@/components/trial-gate-modal";
 import { exportData } from "@/lib/export";
 
 function PreviewActionButton({
@@ -114,6 +115,7 @@ export function InvoicePreviewModal({
   onClose: () => void;
   onUpdate: () => void;
 }) {
+  const gate = useTrialGate('invoicing')
   const subtotal = invoice.items.reduce((sum, item) => sum + item.qty * item.rate, 0);
   const discountAmount = subtotal * (invoice.discount / 100);
   const taxAmount = subtotal * (invoice.tax / 100);
@@ -121,7 +123,14 @@ export function InvoicePreviewModal({
 
   async function handleSaveForLater() {
     try {
-      await saveInvoice(invoice as unknown as Record<string, unknown>);
+      const result = await saveInvoice(invoice as unknown as Record<string, unknown>);
+
+      if (!result.ok) {
+        console.warn('Invoice save blocked by server:', result);
+        gate.openGate()
+        return
+      }
+
       onUpdate?.();
       console.log("Invoice saved")
     } catch (err) {
@@ -308,6 +317,14 @@ export function InvoicePreviewModal({
           <PreviewActionButton icon={Download} label="Download" onClick={handleDownload} />
         </div>
       </div>
+      <TrialGateModal
+        feature="invoicing"
+        isActive={gate.isOpen}
+        onAccept={() => gate.startCheckout()}
+        onDismiss={() => gate.closeGate()}
+        trialDaysRemaining={gate.trialDaysRemaining}
+        subscriptionRequired={!gate.isSubscribed}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Globe, X, Send, ThumbsUp, ThumbsDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { reviewDocument } from "@/lib/blueprint-api";
@@ -21,10 +21,18 @@ function getCannedReply(prompt: string): string {
   return `I couldn't generate a live review for this prompt right now. Please try again in a moment.`;
 }
 
-export function AITorneyChat({ onClose }: { onClose: () => void }) {
+export function AITorneyChat({ onClose, initialReview }: { onClose: () => void; initialReview?: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+
+  useEffect(() => {
+    if (!initialReview) return;
+    setMessages((prev) => {
+      if (prev.some((m) => m.role === 'assistant' && m.text === initialReview)) return prev;
+      return [...prev, { id: crypto.randomUUID(), role: 'assistant', text: initialReview }];
+    });
+  }, [initialReview]);
 
   async function sendMessage(text: string) {
     const trimmed = text.trim();

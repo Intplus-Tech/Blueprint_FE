@@ -8,6 +8,7 @@ import { InvoicePreviewModal } from "@/components/invoice-preview-modal";
 import { InvoiceEditorModal } from "@/components/invoice-editor-modal";
 import { TemplateGallery, TemplatePreviewModal, type Template } from "@/components/invoice-templates";
 import { saveInvoice } from "@/lib/blueprint-api";
+import { TrialGateModal, useTrialGate } from "@/components/trial-gate-modal";
 
 const INITIAL_INVOICES: Invoice[] = [
   {
@@ -185,6 +186,7 @@ function EditorsPanel() {
 // ---------------------------------------------------------------------------
 
 export function InvoicesPanel({ onBreadcrumbChange }: { onBreadcrumbChange?: (text: string) => void }) {
+  const gate = useTrialGate('invoicing')
   const [invoices, setInvoices] = useState<Invoice[]>(INITIAL_INVOICES);
   const [subTab, setSubTab] = useState<SubTab>("my");
   const [search, setSearch] = useState("");
@@ -224,6 +226,16 @@ export function InvoicesPanel({ onBreadcrumbChange }: { onBreadcrumbChange?: (te
   async function handleCreateSubmit(data: Omit<Invoice, "id" | "status">) {
     const payload = { ...data, status: "Draft" };
     const result = await saveInvoice(payload)
+
+    if (!result.ok) {
+      const needsSubscription = [401, 402, 403, 409].includes(result.status) || /trial|subscription|verify/i.test(String(result.error ?? ''))
+      gate.openGate()
+      if (needsSubscription) {
+        // subscription required; modal will indicate subscription requirement
+      }
+      return
+    }
+
     const newInvoice = {
       ...payload,
       id: typeof result.data?.id === "string" ? result.data.id : crypto.randomUUID(),
@@ -236,7 +248,12 @@ export function InvoicesPanel({ onBreadcrumbChange }: { onBreadcrumbChange?: (te
   async function handleUpdateSubmit(data: Omit<Invoice, "id" | "status">) {
     if (!editor?.invoice) return;
     const payload = { ...data, status: editor.invoice.status };
-    await saveInvoice(payload)
+    const result = await saveInvoice(payload)
+    if (!result.ok) {
+      gate.openGate()
+      return
+    }
+
     setInvoices((prev) => prev.map((inv) => (inv.id === editor.invoice!.id ? { ...inv, ...payload, status: editor.invoice!.status } : inv)));
     setEditor(null);
   }
@@ -342,6 +359,15 @@ export function InvoicesPanel({ onBreadcrumbChange }: { onBreadcrumbChange?: (te
           onSubmit={editor.mode === "create" ? handleCreateSubmit : handleUpdateSubmit}
         />
       )}
+
+      <TrialGateModal
+        feature="invoicing"
+        isActive={gate.isOpen}
+        onAccept={() => gate.startCheckout()}
+        onDismiss={() => gate.closeGate()}
+        trialDaysRemaining={gate.trialDaysRemaining}
+        subscriptionRequired={!gate.isSubscribed}
+      />
     </div>
   );
 }

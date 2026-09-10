@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { UploadCloud, FileText, ChevronDown, X } from "lucide-react";
+import { UploadCloud, FileText, ChevronDown, X, Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CloudStorageSelector } from '@/components/cloud-storage-selector'
@@ -87,15 +87,29 @@ export function UploadModal({
             {menuOpen && (
               <div className="absolute left-0 top-full z-10 mt-2 w-44 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
                 {[
-                  { label: 'From computer', id: 'computer' },
-                  { label: 'From Google Drive', id: 'gdrive' },
-                  { label: 'From OneDrive', id: 'onedrive' },
-                  { label: 'From Dropbox', id: 'dropbox' },
+                  { label: 'My Device', id: 'computer', icon: <Monitor className="h-4 w-4 text-neutral-600" /> },
+                  { label: 'Google Drive', id: 'gdrive', icon: (
+                    <svg viewBox="0 0 48 48" className="h-4 w-4" aria-hidden="true">
+                      <path fill="#0f9d58" d="m16.4 30.5 6.1-10.5H10.3L4.2 30.5z" />
+                      <path fill="#4285f4" d="M31.6 30.5 25.5 20 19.4 9.5h12.2l6.1 10.5z" transform="translate(-3.6 0)" />
+                      <path fill="#ffcd40" d="M31.6 30.5H10.3l6.1 10.5h21.3z" transform="translate(-3.6 0)" />
+                    </svg>
+                  )},
+                  { label: 'Onedrive', id: 'onedrive', icon: (
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true" fill="#0364b8">
+                      <path d="M10.5 6a5.5 5.5 0 0 1 5.1 3.5 4.5 4.5 0 0 1 .9 8.9H6a4.5 4.5 0 0 1-1-8.9A5.5 5.5 0 0 1 10.5 6Z" />
+                    </svg>
+                  )},
+                  { label: 'Dropbox', id: 'dropbox', icon: (
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true" fill="#0061ff">
+                      <path d="m6 2 6 3.8L6 9.6 0 5.8 6 2Zm12 0 6 3.8-6 3.8-6-3.8L18 2ZM0 13.4l6-3.8 6 3.8-6 3.8-6-3.8Zm18-3.8 6 3.8-6 3.8-6-3.8 6-3.8ZM6 18.4l6-3.8 6 3.8-6 3.8-6-3.8Z" />
+                    </svg>
+                  )},
                 ].map((option) => (
                   <button
                     key={option.id}
                     type="button"
-                    className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                    className="flex items-center gap-2 w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                     onClick={() => {
                       setMenuOpen(false);
                       if (option.id === 'computer') {
@@ -105,7 +119,8 @@ export function UploadModal({
                       setShowCloudSelector(option.id as 'gdrive' | 'onedrive' | 'dropbox');
                     }}
                   >
-                    {option.label}
+                    <span className="flex items-center">{option.icon}</span>
+                    <span>{option.label}</span>
                   </button>
                 ))}
               </div>
