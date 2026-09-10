@@ -7,6 +7,35 @@ export type BackendRequestOptions = {
   body?: unknown
 }
 
+export function getBearerTokenFromHeaders(headers: Headers | undefined | null): string | null {
+  const authorization = headers?.get('authorization') ?? ''
+  if (authorization.toLowerCase().startsWith('bearer ')) {
+    return authorization.slice(7).trim()
+  }
+
+  const cookieHeader = headers?.get('cookie') ?? ''
+  const cookiePairs = cookieHeader.split(';').map((pair) => pair.trim()).filter(Boolean)
+
+  for (const pair of cookiePairs) {
+    const separatorIndex = pair.indexOf('=')
+    const name = separatorIndex >= 0 ? pair.slice(0, separatorIndex).trim() : pair.trim()
+    const value = separatorIndex >= 0 ? pair.slice(separatorIndex + 1).trim() : ''
+
+    if (['blueprint_token', 'token', 'auth_token', 'jwt'].includes(name)) {
+      return decodeURIComponent(value)
+    }
+  }
+
+  return null
+}
+
+export function getAuthHeadersForRequest(request: Request | Headers | undefined | null): Record<string, string> {
+  const headers = request instanceof Headers ? request : request ? new Headers(request.headers) : new Headers()
+  const token = getBearerTokenFromHeaders(headers)
+
+  return token ? { authorization: `Bearer ${token}` } : {}
+}
+
 export async function forwardToBackend<T>(
   path: string,
   payload?: T,

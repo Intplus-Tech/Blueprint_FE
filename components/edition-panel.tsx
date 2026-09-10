@@ -5,6 +5,7 @@ import { Pencil, Check } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { uploadFile } from "@/lib/api-client";
 
 type Currency = { code: string; symbol: string; flag: string };
 
@@ -24,8 +25,8 @@ const DEFAULT_TERMS =
 
 /**
  * Branding + defaults used when generating invoices (logo, company info,
- * default signature, currency). All local state for now — see the
- * `// TODO` near handleSave for wiring this up to your backend.
+ * default signature, currency). Uploads are backed by the backend and the
+ * panel reflects only real uploaded asset URLs.
  */
 export function EditionPanel() {
   const [isotype, setIsotype] = useState<string | null>(null);
@@ -49,20 +50,12 @@ export function EditionPanel() {
   const logotypeInput = useRef<HTMLInputElement>(null);
   const signatureInput = useRef<HTMLInputElement>(null);
 
-  function handleFile(file: File | undefined, setUrl: (url: string) => void) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setUrl(reader.result as string);
-    reader.readAsDataURL(file);
-  }
-
   function selectCurrency(currency: Currency) {
     setCurrencySymbol(currency.symbol);
     setCurrencyCode(currency.code);
   }
 
   function handleSave() {
-    // TODO: persist this branding/settings payload to your backend
     console.log("Saving edition panel settings", {
       isotype,
       logotype,
@@ -99,7 +92,33 @@ export function EditionPanel() {
             onChangeClick={() => isotypeInput.current?.click()}
             placeholder={<Dots />}
           />
-          <input ref={isotypeInput} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files?.[0], setIsotype)} />
+          <input
+            ref={isotypeInput}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+
+              try {
+                const result = await uploadFile(file, { type: "brand" });
+                const uploadedUrl =
+                  (result as any)?.url ??
+                  (result as any)?.secure_url ??
+                  (result as any)?.fileUrl ??
+                  (result as any)?.data?.url ??
+                  (result as any)?.data?.secure_url ??
+                  (result as any)?.data?.fileUrl ??
+                  (typeof result === "string" ? result : null);
+
+                setIsotype(uploadedUrl ?? null);
+              } catch (error) {
+                console.error("Failed to upload isotype:", error);
+                setIsotype(null);
+              }
+            }}
+          />
 
           <ImageField
             label="Logotype"
@@ -112,7 +131,33 @@ export function EditionPanel() {
               </span>
             }
           />
-          <input ref={logotypeInput} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files?.[0], setLogotype)} />
+          <input
+            ref={logotypeInput}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+
+              try {
+                const result = await uploadFile(file, { type: "brand" });
+                const uploadedUrl =
+                  (result as any)?.url ??
+                  (result as any)?.secure_url ??
+                  (result as any)?.fileUrl ??
+                  (result as any)?.data?.url ??
+                  (result as any)?.data?.secure_url ??
+                  (result as any)?.data?.fileUrl ??
+                  (typeof result === "string" ? result : null);
+
+                setLogotype(uploadedUrl ?? null);
+              } catch (error) {
+                console.error("Failed to upload logotype:", error);
+                setLogotype(null);
+              }
+            }}
+          />
         </Card>
 
         {/* Invoice information */}
@@ -130,10 +175,36 @@ export function EditionPanel() {
             label="Signature"
             imageUrl={signature}
             onChangeClick={() => signatureInput.current?.click()}
-            placeholder={<span className="text-xs text-gray-300">No signature</span>}
+            placeholder={<span className="text-xs text-gray-300">Upload signature</span>}
             tall
           />
-          <input ref={signatureInput} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files?.[0], setSignature)} />
+          <input
+            ref={signatureInput}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+
+              try {
+                const result = await uploadFile(file, { type: "brand" });
+                const uploadedUrl =
+                  (result as any)?.url ??
+                  (result as any)?.secure_url ??
+                  (result as any)?.fileUrl ??
+                  (result as any)?.data?.url ??
+                  (result as any)?.data?.secure_url ??
+                  (result as any)?.data?.fileUrl ??
+                  (typeof result === "string" ? result : null);
+
+                setSignature(uploadedUrl ?? null);
+              } catch (error) {
+                console.error("Failed to upload signature:", error);
+                setSignature(null);
+              }
+            }}
+          />
         </Card>
 
         {/* Company information */}

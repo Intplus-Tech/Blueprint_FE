@@ -130,32 +130,6 @@
   width: 100%;
 }
 
-@media (min-width: 768px) and (max-width: 1023px) {
-  .tablet-main {
-    width: min(100%, 900px);
-    margin: 0 auto;
-    padding-inline: 1.5rem;
-  }
-
-  header,
-  footer {
-    padding-inline: 0.5rem;
-  }
-}
-
-@media (min-width: 1024px) {
-  .tablet-main {
-    width: min(100%, 1200px);
-    margin: 0 auto;
-    padding-inline: 2rem;
-  }
-
-  header,
-  footer {
-    padding-inline: 0.75rem;
-  }
-}
-
 /* Prevent browser autofill from tinting input backgrounds blue/yellow */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,

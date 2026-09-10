@@ -18,12 +18,15 @@ export function fileToDataUrl(file: File): Promise<string> {
 }
 
 export function storePdfFile(file: File) {
+  const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
   sessionStorage.setItem(PDF_NAME_KEY, file.name);
-  if (file.type === "application/pdf") {
+
+  if (isPdf) {
     return fileToDataUrl(file).then((dataUrl) => {
       sessionStorage.setItem(PDF_STORAGE_KEY, dataUrl);
     });
   }
+
   // Non-PDF upload: clear any previous PDF so the viewer waits for a real file.
   sessionStorage.removeItem(PDF_STORAGE_KEY);
   return Promise.resolve();

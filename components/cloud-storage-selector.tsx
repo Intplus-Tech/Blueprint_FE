@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import {
   uploadFile,
   getGoogleAuthUrl,
-  type UploadResponse,
+  getOneDriveAuthUrl,
+  getDropboxAuthUrl,
 } from '@/lib/api-client'
 
 interface StorageOption {
@@ -21,7 +22,7 @@ export function CloudStorageSelector({
   onFileSelected,
   onClose,
 }: {
-  onFileSelected?: (response: UploadResponse | { authUrl: string }) => void
+  onFileSelected?: (response: unknown | { authUrl: string }) => void
   onClose?: () => void
 }) {
   const [isLoading, setIsLoading] = useState(false)
@@ -46,11 +47,49 @@ export function CloudStorageSelector({
       }
 
       if (result?.ok !== false) {
-        localStorage.setItem('bp-cloud-google-drive', JSON.stringify({ provider: 'google-drive', connectedAt: new Date().toISOString() }))
+        // localStorage persistence removed; simply notify caller
         onFileSelected?.(result as any)
       }
     } catch (err) {
       setError('Failed to connect Google Drive. Check your backend connection.')
+      console.error(err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleOneDrive = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const result = await getOneDriveAuthUrl()
+      const authUrl = result?.authUrl ?? result?.data?.authUrl
+      if (typeof authUrl === 'string') {
+        window.location.href = authUrl
+        return
+      }
+      if (result?.ok !== false) onFileSelected?.(result as any)
+    } catch (err) {
+      setError('Failed to connect OneDrive. Check your backend connection.')
+      console.error(err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleDropbox = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const result = await getDropboxAuthUrl()
+      const authUrl = result?.authUrl ?? result?.data?.authUrl
+      if (typeof authUrl === 'string') {
+        window.location.href = authUrl
+        return
+      }
+      if (result?.ok !== false) onFileSelected?.(result as any)
+    } catch (err) {
+      setError('Failed to connect Dropbox. Check your backend connection.')
       console.error(err)
     } finally {
       setIsLoading(false)
@@ -105,6 +144,29 @@ export function CloudStorageSelector({
       ),
       color: 'bg-blue-50 hover:bg-blue-100 border-blue-200',
       action: handleGoogleDrive,
+    },
+    {
+      id: 'onedrive',
+      name: 'OneDrive',
+      icon: (
+        <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M3 12l6-9h12l-6 9H3z" fill="#0078D4" />
+        </svg>
+      ),
+      color: 'bg-sky-50 hover:bg-sky-100 border-sky-200',
+      action: handleOneDrive,
+    },
+    {
+      id: 'dropbox',
+      name: 'Dropbox',
+      icon: (
+        <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2l4 3-4 3-4-3 4-3z" fill="#0061FF" />
+          <path d="M12 14l4 3-4 3-4-3 4-3z" fill="#0061FF" />
+        </svg>
+      ),
+      color: 'bg-sky-50 hover:bg-sky-100 border-sky-200',
+      action: handleDropbox,
     },
   ]
 

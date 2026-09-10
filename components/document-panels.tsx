@@ -4,11 +4,13 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { HardDrive, Cloud, Info, Feather, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CloudStorageSelector } from '@/components/cloud-storage-selector'
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { inviteCoSigner } from "@/lib/blueprint-api";
+import { inviteCoSigner, reviewDocument } from "@/lib/blueprint-api";
+import { createNotification } from "@/lib/notifications";
 
 /* ------------------------------------------------------------------ */
 /* New Document — authenticated source picker                         */
@@ -23,14 +25,24 @@ const SOURCES = [
 
 export function NewDocumentPanel({ onSelected }: { onSelected: (fileName: string) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [showCloudSelector, setShowCloudSelector] = useState<null | 'gdrive' | 'onedrive' | 'dropbox'>(null);
 
   function handleSourceClick(id: string) {
     if (id === "device") {
       inputRef.current?.click();
       return;
     }
-    // TODO: wire up real Google Drive / OneDrive / Dropbox picker integrations
-    onSelected(`${SOURCES.find((s) => s.id === id)?.label} file.pdf`);
+    // Open the cloud storage selector for provider flows
+    if (id === 'google') return setShowCloudSelector('gdrive');
+    if (id === 'onedrive') return setShowCloudSelector('onedrive');
+    if (id === 'dropbox') return setShowCloudSelector('dropbox');
+    // Unknown source: do nothing (removed fallback stub)
+  }
+
+  function handleCloudFileSelected(response: any) {
+    setShowCloudSelector(null);
+    const name = response?.data?.fileName ?? response?.fileName ?? response?.data?.name ?? response?.name ?? response?.data?.url?.split('/').pop();
+    if (name) onSelected(String(name));
   }
 
   return (
@@ -54,6 +66,11 @@ export function NewDocumentPanel({ onSelected }: { onSelected: (fileName: string
           if (e.target.files?.[0]) onSelected(e.target.files[0].name);
         }}
       />
+      {showCloudSelector && (
+        <div className="p-3">
+          <CloudStorageSelector onFileSelected={handleCloudFileSelected} onClose={() => setShowCloudSelector(null)} />
+        </div>
+      )}
     </div>
   );
 }
@@ -62,12 +79,14 @@ export function NewDocumentPanel({ onSelected }: { onSelected: (fileName: string
 /* Add Signer — authenticated co-signer form                          */
 /* ------------------------------------------------------------------ */
 
+export type SignerStatusValue = "Pending" | "Signed" | "Not Signed";
+
 export type Signer = {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
-  status: "Pending" | "Signed";
+  status?: string | boolean;
 };
 
 export function AddSignerPanel({
@@ -77,7 +96,7 @@ export function AddSignerPanel({
   onClose,
 }: {
   signers: Signer[];
-  onAddSigner: (signer: Omit<Signer, "id" | "status">) => void;
+  onAddSigner: (signer: { firstName: string; lastName: string; email: string; id?: string; status?: string }) => void;
   onResend: (id: string) => void;
   onClose: () => void;
 }) {
@@ -102,14 +121,21 @@ export function AddSignerPanel({
       if (!result.ok && result.status >= 400) {
         throw new Error(result.error ?? "Invite failed")
       }
-      onAddSigner(payload);
+      const created = (result.data as any) ?? {}
+      onAddSigner({
+        firstName: payload.firstName,
+        lastName: payload.lastName,
+        email: payload.email,
+        id: created.id,
+        status: created.status ?? 'Pending',
+      });
       setFirstName("");
       setLastName("");
       setEmail("");
       if (!addMore) onClose();
     } catch (error) {
       console.error("Failed to create signer invite:", error)
-      onAddSigner(payload)
+      // don't add signer if invite failed
       if (!addMore) onClose();
     } finally {
       setIsSending(false)
@@ -129,28 +155,40 @@ export function AddSignerPanel({
 
       {signers.length > 0 && (
         <div className="mb-3 space-y-1.5 border-b border-gray-100 pb-3">
-          {signers.map((s, i) => (
-            <div key={s.id} className="rounded-md bg-gray-50 px-2.5 py-1.5 text-xs">
-              <div className="mb-0.5 flex items-center justify-between">
-                <span className="font-semibold text-gray-700">Signer {i + 1}</span>
-                <span
-                  className={cn(
-                    "rounded-full px-2 py-0.5 font-medium",
-                    s.status === "Signed" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+          {signers.map((s, i) => {
+            // Expect backend to provide a normalized `status` string ("Signed" | "Pending" | "Not Signed").
+            // Fall back to a simple string coercion if absent.
+            const status = typeof s.status === 'string' && s.status ? s.status : 'Pending';
+
+            return (
+              <div key={s.id} className="rounded-md bg-gray-50 px-2.5 py-1.5 text-xs">
+                <div className="mb-0.5 flex items-center justify-between">
+                  <span className="font-semibold text-gray-700">Signer {i + 1}</span>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 font-medium",
+                      status === "Signed"
+                        ? "bg-green-100 text-green-700"
+                        : status === "Pending"
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-red-100 text-red-700"
+                    )}
+                  >
+                    {status}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-gray-500">
+                  <span>{s.firstName} {s.lastName}</span>
+                  {status === "Pending" && (
+                    <button type="button" onClick={() => onResend(s.id)} className="font-medium text-brand-600 hover:text-brand-700">
+                      Resend Invite
+                    </button>
                   )}
-                >
-                  {s.status}
-                </span>
+                </div>
+                <div className="text-gray-400">{s.email}</div>
               </div>
-              <div className="flex items-center justify-between text-gray-500">
-                <span>{s.firstName} {s.lastName}</span>
-                <button type="button" onClick={() => onResend(s.id)} className="font-medium text-brand-600 hover:text-brand-700">
-                  Resend Invite
-                </button>
-              </div>
-              <div className="text-gray-400">{s.email}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -211,7 +249,32 @@ export function AddSignerPanel({
 /* AI Review — authenticated confirmation panel                       */
 /* ------------------------------------------------------------------ */
 
-export function AIReviewPanel({ onClose, onStart }: { onClose: () => void; onStart: () => void }) {
+export function AIReviewPanel({ onClose, onStart }: { onClose: () => void; onStart: (reviewResult?: Record<string, any>) => void }) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleStart() {
+    setError(null);
+    setIsLoading(true);
+    try {
+      // Basic prompt; backend may use document context if available
+      const prompt = 'Please review the uploaded document and return a short summary, identified risks, and recommended next steps.';
+      const resp = await reviewDocument(prompt);
+      if (!resp.ok) {
+        throw new Error(resp.error ?? 'AI review failed');
+      }
+      // Notify user and advance UI, pass review data to parent so chat can consume it
+      createNotification.system('AI review complete', 'Document review finished. Open chat to view details.');
+      onStart(resp.data as Record<string, any>);
+    } catch (err: any) {
+      console.error('AI review failed', err);
+      setError(err?.message ?? 'AI review failed');
+      createNotification.system('AI review failed', String(err?.message ?? 'Please try again later.'));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   return (
     <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-lg border border-gray-200 bg-white p-5 shadow-xl">
       <h3 className="mb-2 text-sm font-bold text-gray-900">AI Document Reviewer</h3>
@@ -225,9 +288,12 @@ export function AIReviewPanel({ onClose, onStart }: { onClose: () => void; onSta
           to review the document with this system.
         </span>
       </p>
+      {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
       <div className="mt-4 flex items-center justify-end gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-        <Button type="button" size="sm" className="bg-brand-600 text-white hover:bg-brand-700" onClick={onStart}>Review free</Button>
+        <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isLoading}>Cancel</Button>
+        <Button type="button" size="sm" className="bg-brand-600 text-white hover:bg-brand-700" onClick={handleStart} disabled={isLoading}>
+          {isLoading ? 'Reviewing...' : 'Review free'}
+        </Button>
       </div>
     </div>
   );

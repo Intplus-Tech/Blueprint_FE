@@ -1,9 +1,12 @@
 'use client'
 
-import React, { useId, useState } from 'react'
+import React, { useId, useState, useEffect, useRef } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { Button } from '@/components/ui/button'
 import { XIcon, Clock, Lock } from 'lucide-react'
+import { getBackendUrl } from '@/lib/api-client'
+import { initiatePaystackCheckout } from '@/lib/subscription-client'
+import getSession from '@/lib/session-client'
 
 export interface TrialGateProps {
   feature: 'invoicing' | 'ai-review' | 'cosign'
@@ -114,7 +117,7 @@ export function TrialGateModal({
             onClick={onAccept}
             className="flex-1 bg-brand font-semibold text-white hover:bg-brand-hover rounded-full"
           >
-            Sign In & Continue
+            {subscriptionRequired ? 'Subscribe' : 'Sign In & Continue'}
           </Button>
           <Button onClick={onDismiss} variant="outline" className="flex-1 rounded-full font-semibold">
             Maybe Later
@@ -137,13 +140,85 @@ export function useTrialGate(feature: TrialGateProps['feature']) {
   const [isOpen, setIsOpen] = useState(false)
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [trialDaysRemaining, setTrialDaysRemaining] = useState(0)
+  const [subscriptionAmount, setSubscriptionAmount] = useState<number | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  async function fetchSessionInfo() {
+    try {
+      const res = await fetch(getBackendUrl('/session'))
+      if (!res.ok) return
+      const payload = await res.json().catch(() => null)
+      const data = payload?.data ?? payload
+      const sub = data?.subscription ?? data
+
+      setIsAuthenticated(Boolean(data?.user || data?.isAuthenticated))
+      setIsSubscribed(Boolean(sub?.isActive || sub?.subscriptionPlan === 'premium'))
+      setTrialDaysRemaining(Number(sub?.trialDaysRemaining ?? data?.trialDaysRemaining ?? 0))
+      setSubscriptionAmount(sub?.subscriptionAmount ?? data?.subscriptionAmount ?? null)
+    } catch (err) {
+      console.error('Failed to fetch session info for trial gate:', err)
+    }
+  }
+
+  async function startCheckout() {
+    // Redirect users to the in-app billing page where checkout is handled
+    try {
+      const q = new URLSearchParams()
+      if (subscriptionAmount != null) q.set('amount', String(subscriptionAmount))
+      if (feature) q.set('feature', feature)
+      window.location.href = `/billing?${q.toString()}`
+    } catch (err) {
+      console.error('Failed to open billing page:', err)
+      window.location.href = '/authenticated-dashboard'
+    }
+  }
+
+  // Poll the session endpoint while the gate is open. If the subscription
+  // becomes active (e.g. after a successful Paystack flow), close the modal
+  // automatically so users can continue without manual refresh.
+  const pollRef = useRef<number | null>(null)
+  useEffect(() => {
+    let attempts = 0
+    const maxAttempts = 40 // ~2 minutes at 3s interval
+
+    async function poll() {
+      try {
+        const session = await getSession()
+        const sub = (session && (session as any).subscription) ?? session
+        const active = Boolean(sub && (sub.isActive || sub.subscriptionPlan === 'premium'))
+        if (active) {
+          setIsSubscribed(true)
+          setIsOpen(false)
+          return
+        }
+      } catch (err) {
+        // ignore and retry
+      }
+
+      attempts += 1
+      if (attempts < maxAttempts && isOpen) {
+        pollRef.current = window.setTimeout(poll, 3000)
+      }
+    }
+
+    if (isOpen) poll()
+    return () => {
+      if (pollRef.current) window.clearTimeout(pollRef.current)
+    }
+  }, [isOpen])
 
   return {
     isOpen,
-    openGate: () => setIsOpen(true),
+    openGate: async () => {
+      setIsOpen(true)
+      await fetchSessionInfo()
+    },
     closeGate: () => setIsOpen(false),
     isSubscribed,
     trialDaysRemaining,
+    subscriptionAmount,
+    isAuthenticated,
+    startCheckout,
     setIsSubscribed,
     setTrialDaysRemaining,
   }

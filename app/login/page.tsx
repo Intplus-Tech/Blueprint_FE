@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Logo } from "@/components/logo";
 import { AuthLayout } from "@/components/auth-layout";
 import { Button } from "@/components/ui/button";
@@ -10,14 +10,39 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
+import { getBackendUrl, loginUser, persistAuthSession } from "@/lib/api-client";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginPageLoading />}>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    const registered = searchParams.get("registered");
+    const verified = searchParams.get("verified");
+
+    if (registered === "1") {
+      setNotice("Account created. Please verify your email before signing in.");
+      return;
+    }
+
+    if (verified === "1") {
+      setNotice("Your email has been verified. You can now sign in.");
+    }
+  }, [searchParams]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -30,10 +55,34 @@ export default function LoginPage() {
 
     setIsSubmitting(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      const payload = { email: email.trim(), password };
+      const response = await loginUser(payload);
+
+      const responseData = response?.data ?? response;
+      persistAuthSession(responseData);
+
       router.push("/dashboard");
-    } catch {
-      setError("We couldn't log you in. Check your details and try again.");
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const serverMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.response?.data?.detail ||
+        err?.message;
+      const messageText = typeof serverMessage === "string" ? serverMessage : "";
+      const fallback = err?.message || "We couldn't log you in. Check your details and try again.";
+
+      if (
+        status === 401 ||
+        status === 403 ||
+        status === 409 ||
+        /verify|verification|confirm|confirmed|activation|activate/i.test(messageText)
+      ) {
+        setError("Please verify your email before signing in. Check the verification email we sent you.");
+        return;
+      }
+
+      setError(messageText || fallback);
     } finally {
       setIsSubmitting(false);
     }
@@ -41,7 +90,7 @@ export default function LoginPage() {
 
   async function handleGoogleLogin() {
     try {
-      const res = await fetch('/api/auth/google/url')
+      const res = await fetch(getBackendUrl('/auth/google/auth-url'))
       if (!res.ok) {
         throw new Error('Failed to get Google auth URL')
       }
@@ -50,22 +99,14 @@ export default function LoginPage() {
       const url = payload?.data?.authUrl ?? payload?.data?.url ?? payload?.url ?? payload?.authUrl
 
       if (typeof url === 'string' && url.trim()) {
-        localStorage.setItem('bp-google-user', JSON.stringify({
-          name: 'Google User',
-          email: 'google-user@example.com',
-        }))
         window.location.href = url
         return
       }
 
-      router.push('/dashboard')
+      setError('Google authentication is currently unavailable. Please try again later.')
     } catch (error) {
       console.error('Google login failed:', error)
-      localStorage.setItem('bp-google-user', JSON.stringify({
-        name: 'Google User',
-        email: 'google-user@example.com',
-      }))
-      router.push('/dashboard')
+      setError('Google authentication failed. Please try again later.')
     }
   }
 
@@ -131,6 +172,7 @@ export default function LoginPage() {
           </Link>
         </div>
 
+        {notice && <p className="text-xs text-green-600">{notice}</p>}
         {error && <p className="text-xs text-red-600">{error}</p>}
 
         <Button
@@ -150,9 +192,35 @@ export default function LoginPage() {
         </Link>
       </p>
 
+      <div className="mt-3">
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-9 w-full border border-gray-200 bg-white/40 text-gray-800 hover:bg-white/50"
+          onClick={() => {
+            // Route to the public landing so guests can upload and preview immediately
+            window.location.href = "/";
+          }}
+        >
+          Continue as Guest
+        </Button>
+      </div>
+
       <p className="mt-6 text-center text-xs text-gray-400">
         Powered By: <span className="font-medium text-gray-600">Al Torney</span>
       </p>
+    </AuthLayout>
+  );
+}
+
+function LoginPageLoading() {
+  return (
+    <AuthLayout>
+      <div className="flex flex-col items-center text-center">
+        <Logo size="lg" className="mb-4" />
+        <h1 className="text-2xl font-medium text-gray-900">Log in</h1>
+        <p className="mt-1 text-xs text-gray-500">Loading…</p>
+      </div>
     </AuthLayout>
   );
 }

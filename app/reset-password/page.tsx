@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { Suspense, useState, type FormEvent } from "react";
+import { useSearchParams } from 'next/navigation';
+import { postJson } from '@/lib/api-client';
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/logo";
 import { AuthLayout } from "@/components/auth-layout";
@@ -10,11 +12,20 @@ import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<ResetPasswordLoading />}>
+      <ResetPasswordContent />
+    </Suspense>
+  );
+}
+
+function ResetPasswordContent() {
   const router = useRouter();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const searchParams = useSearchParams();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -33,15 +44,15 @@ export default function ResetPasswordPage() {
       return;
     }
 
+    const token = searchParams.get("token");
+
     setIsSubmitting(true);
     try {
-      // TODO: replace with your real request, e.g.:
-      // const token = searchParams.get("token");
-      // await resetPassword({ token, newPassword });
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await postJson('/auth/reset-password', { token, newPassword });
       router.push("/login");
-    } catch {
-      setError("We couldn't reset your password. The link may have expired.");
+    } catch (err) {
+      console.error('Reset password failed', err);
+      setError("We couldn't reset your password. The link may have expired or the server failed.");
     } finally {
       setIsSubmitting(false);
     }
@@ -86,6 +97,18 @@ export default function ResetPasswordPage() {
           Reset Password
         </Button>
       </form>
+    </AuthLayout>
+  );
+}
+
+function ResetPasswordLoading() {
+  return (
+    <AuthLayout centered>
+      <div className="flex flex-col items-center text-center">
+        <Logo size="lg" className="mb-6" />
+        <h1 className="text-2xl font-semibold text-gray-900">Reset Password</h1>
+        <p className="mt-2 text-sm text-gray-500">Loading…</p>
+      </div>
     </AuthLayout>
   );
 }

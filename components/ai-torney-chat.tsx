@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Globe, X, Send, ThumbsUp, ThumbsDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { reviewDocument } from "@/lib/blueprint-api";
@@ -18,13 +18,21 @@ const QUICK_START = [
 ];
 
 function getCannedReply(prompt: string): string {
-  return `I couldn’t generate a live review for this prompt yet. Please connect the AI review endpoint to return a real response.`;
+  return `I couldn't generate a live review for this prompt right now. Please try again in a moment.`;
 }
 
-export function AITorneyChat({ onClose }: { onClose: () => void }) {
+export function AITorneyChat({ onClose, initialReview }: { onClose: () => void; initialReview?: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+
+  useEffect(() => {
+    if (!initialReview) return;
+    setMessages((prev) => {
+      if (prev.some((m) => m.role === 'assistant' && m.text === initialReview)) return prev;
+      return [...prev, { id: crypto.randomUUID(), role: 'assistant', text: initialReview }];
+    });
+  }, [initialReview]);
 
   async function sendMessage(text: string) {
     const trimmed = text.trim();
@@ -37,7 +45,13 @@ export function AITorneyChat({ onClose }: { onClose: () => void }) {
 
     try {
       const result = await reviewDocument(trimmed)
-      const answer = result?.data?.answer || result?.data?.summary || getCannedReply(trimmed)
+      const nested = (result?.data && typeof result.data === 'object') ? result.data as Record<string, unknown> : {}
+      const answer =
+        (typeof nested.answer === 'string' ? nested.answer : '') ||
+        (typeof nested.summary === 'string' ? nested.summary : '') ||
+        (typeof nested.message === 'string' ? nested.message : '') ||
+        getCannedReply(trimmed)
+
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", text: answer }]);
     } catch {
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", text: getCannedReply(trimmed) }]);

@@ -29,7 +29,7 @@ type DocRow = {
   docId: string;
   name: string;
   status: Status;
-  signers: { name: string; signed: boolean }[];
+  signers: { name: string; signed?: boolean; status?: string }[];
   created: string;
   lastActivity: string;
   createdBy: string;
@@ -123,6 +123,23 @@ export default function DashboardPage() {
     ]);
   }
 
+  function handleCloudUploaded(meta: { name: string; url?: string; size?: number }) {
+    const name = meta?.name ?? 'Uploaded document'
+    setDocs((prev) => [
+      {
+        id: crypto.randomUUID(),
+        docId: String(Math.floor(100000 + Math.random() * 900000)),
+        name,
+        status: "Pending",
+        signers: [{ name: "You", signed: false }],
+        created: new Date().toLocaleDateString("en-GB").replaceAll("/", "."),
+        lastActivity: new Date().toLocaleDateString("en-GB").replaceAll("/", "."),
+        createdBy: "Current user",
+      },
+      ...prev,
+    ]);
+  }
+
   function toDetailSigners(doc: DocRow): DetailSigner[] {
     return [
       { id: "you", name: "You (Alex)", status: "Signed" },
@@ -131,7 +148,7 @@ export default function DashboardPage() {
         label: `Signer ${i + 1}`,
         name: s.name,
         email: `${s.name.toLowerCase().replace(/\s+/g, "")}@greymail.com`,
-        status: (s.signed ? "Signed" : "Pending") as DetailSigner["status"],
+        status: s.status ?? "pending",
         date: s.signed ? new Date().toISOString().slice(0, 16).replace("T", " ") : undefined,
       })),
     ];
@@ -327,7 +344,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} onUploaded={handleUploaded} />
+      <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} onUploaded={handleUploaded} onCloudUploaded={handleCloudUploaded} />
 
       {/* Render Add Signer Modal */}
       {addSignerDocId && (

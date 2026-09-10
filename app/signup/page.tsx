@@ -14,6 +14,7 @@ import { AuthLayout } from "@/components/auth-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { registerUser, getGoogleAuthUrl } from "@/lib/api-client";
 // import { Select } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 
@@ -56,20 +57,39 @@ export default function SignupPage() {
 
     setIsSubmitting(true);
     try {
-      // TODO: replace with your real sign-up call, e.g.:
-      // await signUp({ fullName, email, industry, password });
-      await new Promise((resolve) => setTimeout(resolve, 700));
-      router.push("/dashboard");
-    } catch {
-      setError("We couldn't create your account. Please try again.");
+      await registerUser({
+        fullName: fullName.trim(),
+        email: email.trim(),
+        industry: industry || "Other",
+        password,
+      });
+
+      router.push("/login?registered=1");
+    } catch (err: any) {
+      const serverMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.response?.data?.detail ||
+        err?.message;
+
+      setError(serverMessage || "We couldn't create your account. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
   function handleGoogleSignup() {
-    // TODO: wire up your Google OAuth flow here
-    console.log("Continue with Google");
+    // Try to obtain a Google OAuth URL from the backend and redirect.
+    getGoogleAuthUrl()
+      .then((res: any) => {
+        const authUrl = res?.authUrl ?? res?.data?.authUrl ?? res?.data?.url ?? res?.url;
+        if (typeof authUrl === 'string') window.location.href = authUrl;
+        else console.log('Continue with Google');
+      })
+      .catch((err: any) => {
+        console.error('Failed to get Google auth URL', err);
+        console.log('Continue with Google');
+      });
   }
 
   return (
@@ -180,6 +200,20 @@ export default function SignupPage() {
           Sign In
         </Link>
       </p>
+
+      <div className="mt-3">
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-9 w-full border border-gray-200 bg-white/40 text-gray-800 hover:bg-white/50"
+          onClick={() => {
+            // Route guests to landing so they can immediately upload and preview
+            window.location.href = "/";
+          }}
+        >
+          Continue as Guest
+        </Button>
+      </div>
     </AuthLayout>
   );
 }

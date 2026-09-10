@@ -9,23 +9,30 @@ import { cn } from "@/lib/utils";
 
 /* Shared signer row (used by Details + Resend modals) */
 
+export type DetailSignerStatus = "Pending" | "Signed" | "Not Signed";
+
 export type DetailSigner = {
   id: string;
   label?: string;
   name: string;
   email?: string;
-  status: "Pending" | "Signed";
+  status?: string | boolean;
   date?: string;
 };
 
 function SignerRow({ signer, onResend }: { signer: DetailSigner; onResend?: (id: string) => void }) {
+  // Rely on backend to provide a normalized `status` string ("Signed" | "Pending" | "Not Signed").
+  const displayStatus = typeof signer.status === 'string' && signer.status ? signer.status : 'Pending';
+  const isSigned = displayStatus === 'Signed';
+  const isPending = displayStatus === 'Pending';
+
   return (
     <div className="flex items-start justify-between text-sm">
       <div>
         {signer.label && <p className="text-xs font-semibold text-gray-500">{signer.label}</p>}
         <div className="flex items-center gap-2">
           <p className="font-medium text-gray-800">{signer.name}</p>
-          {signer.status === "Pending" && onResend && (
+          {isPending && onResend && (
             <button
               type="button"
               onClick={() => onResend(signer.id)}
@@ -38,9 +45,9 @@ function SignerRow({ signer, onResend }: { signer: DetailSigner; onResend?: (id:
         {signer.email && <p className="text-xs text-gray-400">{signer.email}</p>}
       </div>
       <div className="flex flex-col items-end gap-0.5">
-        <span className={cn("flex items-center gap-1 text-xs font-medium", signer.status === "Signed" ? "text-green-600" : "text-red-500")}>
-          {signer.status === "Signed" ? <CheckCircle2 className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-          {signer.status === "Signed" ? "Signed" : "Not Signed"}
+        <span className={cn("flex items-center gap-1 text-xs font-medium", isSigned ? "text-green-600" : "text-red-500")}>
+          {isSigned ? <CheckCircle2 className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+          {displayStatus}
         </span>
         {signer.date && <span className="text-[11px] text-gray-400">{signer.date}</span>}
       </div>
@@ -285,7 +292,7 @@ export function useDashboardModals(docs: any[], handleAddSignerFromModal: (docId
               selectedDoc?.signers.map((s: any, idx: number) => ({
                 id: String(idx),
                 name: s.name,
-                status: s.signed ? "Signed" : "Pending",
+                status: s.status ?? (s.signed ? "signed" : "pending"),
               })) || []
             }
             showAddForm={showAddForm}
