@@ -1,12 +1,10 @@
 /**
- * Client-only PDF.js loader + sessionStorage bridge.
+ * Client-only PDF.js loader utilities.
  *
- * The uploaded PDF is handed from the landing page / dashboard upload modal to
- * the document viewer via sessionStorage as a base64 data URL.
+ * We intentionally avoid browser persistence for uploaded document data.
+ * The frontend now uploads directly to the backend and loads document content
+ * from backend-backed endpoints instead of sessionStorage.
  */
-
-export const PDF_STORAGE_KEY = "bp_doc_pdf_data";
-export const PDF_NAME_KEY = "bp_doc_pdf_name";
 
 export function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -15,21 +13,6 @@ export function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
-}
-
-export function storePdfFile(file: File) {
-  const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
-  sessionStorage.setItem(PDF_NAME_KEY, file.name);
-
-  if (isPdf) {
-    return fileToDataUrl(file).then((dataUrl) => {
-      sessionStorage.setItem(PDF_STORAGE_KEY, dataUrl);
-    });
-  }
-
-  // Non-PDF upload: clear any previous PDF so the viewer waits for a real file.
-  sessionStorage.removeItem(PDF_STORAGE_KEY);
-  return Promise.resolve();
 }
 
 /** Dynamically imports pdfjs-dist (client-only) and configures its worker. */

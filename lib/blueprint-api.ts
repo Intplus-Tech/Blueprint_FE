@@ -59,3 +59,57 @@ export async function saveInvoice(payload: Record<string, unknown>) {
     body: JSON.stringify(payload),
   })
 }
+
+export async function listInvoices() {
+  return blueprintRequest<Array<Record<string, unknown>>>('/invoices', {
+    method: 'GET',
+  })
+}
+
+export type BackendDocument = {
+  id?: string
+  documentId?: string
+  _id?: string
+  name?: string
+  fileName?: string
+  status?: string
+  state?: string
+  createdAt?: string
+  updatedAt?: string
+  issueDate?: string
+  billTo?: string
+  signers?: Array<{ id?: string; name?: string; email?: string; status?: string; signed?: boolean }>
+  [key: string]: unknown
+}
+
+export async function listDocuments() {
+  return blueprintRequest<BackendDocument[]>('/documents', {
+    method: 'GET',
+  })
+}
+
+export async function getDocument(documentId: string) {
+  return blueprintRequest<BackendDocument>(`/documents/${encodeURIComponent(documentId)}`, {
+    method: 'GET',
+  })
+}
+
+export async function createDocument(payload: Record<string, unknown>) {
+  return blueprintRequest<BackendDocument>('/documents', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateDocument(documentId: string, payload: Record<string, unknown>) {
+  return blueprintRequest<BackendDocument>(`/documents/${encodeURIComponent(documentId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteDocument(documentId: string) {
+  return blueprintRequest<{ success?: boolean; deleted?: boolean; message?: string }>(`/documents/${encodeURIComponent(documentId)}`, {
+    method: 'DELETE',
+  })
+}

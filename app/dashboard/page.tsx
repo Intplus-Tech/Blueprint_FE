@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
+import { useSessionData } from "@/lib/session-client";
 import {
   AddSignerModal,
   DocumentDetailsModal,
@@ -20,7 +21,7 @@ import { inviteCoSigner } from '@/lib/blueprint-api'
 import { createNotification } from '@/lib/notifications'
 import { exportDocuments } from "@/lib/export";
 import { cn } from "@/lib/utils";
-import { storePdfFile } from "@/lib/pdf";
+import { deleteDocument, listDocuments } from "@/lib/blueprint-api";
 
 type Status = "Pending" | "Signed" | "Expired";
 
@@ -48,6 +49,7 @@ export default function DashboardPage() {
   const [tab, setTab] = useState<Tab>("Documents");
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [documentsLoading, setDocumentsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("created");
@@ -64,6 +66,55 @@ export default function DashboardPage() {
   const [invoicesEmpty, setInvoicesEmpty] = useState(false);
 
   const { unreadCount } = useNotifications();
+  const { displayName } = useSessionData();
+
+  const refreshDocuments = async () => {
+    try {
+      const res = await listDocuments();
+      if (!res.ok || !Array.isArray(res.data)) {
+        setDocs([]);
+        return;
+      }
+
+      const normalized = res.data
+        .map((doc) => {
+          const id = String(doc.id ?? doc.documentId ?? doc._id ?? crypto.randomUUID());
+          const name = String(doc.name ?? doc.fileName ?? 'Untitled document');
+          const status = (doc.status ?? doc.state ?? 'Pending') as Status;
+          const issueDate = typeof doc.issueDate === 'string' ? doc.issueDate : new Date().toLocaleDateString('en-GB').replaceAll('/', '.');
+          const docSignerList = Array.isArray(doc.signers) ? doc.signers : [];
+
+          return {
+            id,
+            docId: String(doc.documentId ?? doc.id ?? doc._id ?? id),
+            name,
+            status: status === 'Signed' || status === 'Pending' || status === 'Expired' ? status : 'Pending',
+            signers: docSignerList.length > 0
+              ? docSignerList.map((signer) => ({
+                  name: signer?.name ?? signer?.email ?? 'Signer',
+                  signed: Boolean(signer?.signed),
+                  status: signer?.status ?? 'pending',
+                }))
+              : [{ name: 'You', signed: false }],
+            created: issueDate,
+            lastActivity: typeof doc.updatedAt === 'string' ? doc.updatedAt : issueDate,
+            createdBy: displayName,
+          } satisfies DocRow;
+        })
+        .filter(Boolean);
+
+      setDocs(normalized);
+    } catch (error) {
+      console.error('Failed to load documents from backend:', error);
+      setDocs([]);
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshDocuments();
+  }, [displayName]);
 
   const filteredDocs = useMemo(() => {
     if (!search.trim()) return docs;
@@ -89,9 +140,22 @@ export default function DashboardPage() {
     });
   }
 
-  function handleConfirmDelete() {
-    if (deleteDocId) setDocs((prev) => prev.filter((d) => d.id !== deleteDocId));
-    setDeleteDocId(null);
+  async function handleConfirmDelete() {
+    if (!deleteDocId) {
+      setDeleteDocId(null);
+      return;
+    }
+
+    try {
+      const res = await deleteDocument(deleteDocId);
+      if (res.ok) {
+        setDocs((prev) => prev.filter((d) => d.id !== deleteDocId));
+      }
+    } catch (error) {
+      console.error('Failed to delete document from backend:', error);
+    } finally {
+      setDeleteDocId(null);
+    }
   }
 
   function handleAddSignerFromModal(docId: string, signer: { firstName: string; lastName: string; email: string }) {
@@ -106,43 +170,19 @@ export default function DashboardPage() {
   }
 
   function handleUploaded(file: File) {
-    storePdfFile(file).catch((err) => console.error("Failed to read file:", err));
-
-    setDocs((prev) => [
-      {
-        id: crypto.randomUUID(),
-        docId: String(Math.floor(100000 + Math.random() * 900000)),
-        name: file.name,
-        status: "Pending",
-        signers: [{ name: "You", signed: false }],
-        created: new Date().toLocaleDateString("en-GB").replaceAll("/", "."),
-        lastActivity: new Date().toLocaleDateString("en-GB").replaceAll("/", "."),
-        createdBy: "Current user",
-      },
-      ...prev,
-    ]);
+    void refreshDocuments();
   }
 
   function handleCloudUploaded(meta: { name: string; url?: string; size?: number }) {
-    const name = meta?.name ?? 'Uploaded document'
-    setDocs((prev) => [
-      {
-        id: crypto.randomUUID(),
-        docId: String(Math.floor(100000 + Math.random() * 900000)),
-        name,
-        status: "Pending",
-        signers: [{ name: "You", signed: false }],
-        created: new Date().toLocaleDateString("en-GB").replaceAll("/", "."),
-        lastActivity: new Date().toLocaleDateString("en-GB").replaceAll("/", "."),
-        createdBy: "Current user",
-      },
-      ...prev,
-    ]);
+    void refreshDocuments();
+    void meta;
   }
 
   function toDetailSigners(doc: DocRow): DetailSigner[] {
+    const creatorName = doc.createdBy?.trim() || "You";
+
     return [
-      { id: "you", name: "You (Alex)", status: "Signed" },
+      { id: "you", name: `You (${creatorName})`, status: "Signed" },
       ...doc.signers.map((s, i) => ({
         id: `${doc.id}:${i}`,
         label: `Signer ${i + 1}`,

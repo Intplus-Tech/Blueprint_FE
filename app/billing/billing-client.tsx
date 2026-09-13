@@ -33,7 +33,7 @@ export default function BillingClient() {
         if (mounted) {
           await getSession()
           // redirect to dashboard with success flag
-          window.location.href = '/authenticated-dashboard?payment=success'
+          window.location.href = '/dashboard?payment=success'
         }
       } catch (err: any) {
         console.error('Verification failed', err)
@@ -61,10 +61,10 @@ export default function BillingClient() {
       }
       const reference = payload?.reference ?? payload?.paymentReference
       if (typeof reference === 'string' && reference.trim()) {
-        window.location.href = `/authenticated-dashboard?reference=${encodeURIComponent(reference)}`
+        window.location.href = `/dashboard?reference=${encodeURIComponent(reference)}`
         return
       }
-      window.location.href = '/authenticated-dashboard'
+      window.location.href = '/dashboard'
     } catch (err: any) {
       console.error('Checkout failed', err)
       setError(err?.message ?? 'Checkout failed')

@@ -19,7 +19,8 @@ import { NotificationWidget } from "@/components/notification-widget";
 import { NotificationCenter } from "@/components/notification-center";
 import { PdfPageCanvas } from "@/components/pdf-page-canvas";
 import { TrialGateModal, useTrialGate } from "@/components/trial-gate-modal";
-import { getPdfjs, PDF_STORAGE_KEY, PDF_NAME_KEY, type PdfDocumentProxy } from "@/lib/pdf";
+import { getPdfjs, type PdfDocumentProxy } from "@/lib/pdf";
+import { getDocument } from "@/lib/blueprint-api";
 
 const FALLBACK_PAGE_COUNT = 1;
 const DEFAULT_DOC_NAME = "Untitled document";
@@ -39,7 +40,6 @@ function DocumentPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const isAuthenticated = searchParams.get("from") === "dashboard";
-  const isGuest = searchParams.get("from") === "guest";
 
   const [currentPage, setCurrentPage] = useState(1);
   const aiGate = useTrialGate('ai-review')
@@ -59,74 +59,65 @@ function DocumentPageInner() {
   const [pdfStatus, setPdfStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [docName, setDocName] = useState(DEFAULT_DOC_NAME);
 
-  // Load a PDF handed off from the landing page / dashboard upload flow.
   useEffect(() => {
     let active = true;
 
-    async function load() {
-      const storedName = sessionStorage.getItem(PDF_NAME_KEY);
-      if (storedName) setDocName(storedName);
+    async function loadDocument() {
+      const documentId = searchParams.get('id');
+      const uploadedName = searchParams.get('name');
 
-      const dataUrl = sessionStorage.getItem(PDF_STORAGE_KEY);
-      if (!dataUrl) return;
+      if (uploadedName) {
+        setDocName(uploadedName);
+      }
 
-      setPdfStatus("loading");
+      if (!documentId) {
+        setPdfStatus('idle');
+        setPdfDoc(null);
+        setPdfNumPages(0);
+        return;
+      }
+
       try {
-        const pdfjsLib = await getPdfjs();
-        const doc = await pdfjsLib.getDocument(dataUrl).promise;
+        setPdfStatus('loading');
+        const res = await getDocument(documentId);
         if (!active) return;
-        setPdfDoc(doc);
-        setPdfNumPages(doc.numPages);
-        setCurrentPage(1);
-        setPdfStatus("ready");
-      } catch (err) {
-        console.error("Failed to load PDF:", err);
-        if (active) setPdfStatus("error");
+
+        if (res.ok && res.data) {
+          const record = res.data as Record<string, unknown>;
+          const nextName = typeof record.name === 'string' ? record.name : (typeof record.fileName === 'string' ? record.fileName : DEFAULT_DOC_NAME);
+          setDocName(nextName);
+
+          const fileUrl = typeof record.fileUrl === 'string' ? record.fileUrl : (typeof record.url === 'string' ? record.url : null);
+          if (fileUrl) {
+            const pdfjsLib = await getPdfjs();
+            const doc = await pdfjsLib.getDocument(fileUrl).promise;
+            if (!active) return;
+            setPdfDoc(doc);
+            setPdfNumPages(doc.numPages);
+            setCurrentPage(1);
+            setPdfStatus('ready');
+            return;
+          }
+        }
+
+        setPdfStatus('idle');
+        setPdfDoc(null);
+        setPdfNumPages(0);
+      } catch (error) {
+        console.error('Failed to load document from backend:', error);
+        if (active) {
+          setPdfStatus('error');
+          setPdfDoc(null);
+          setPdfNumPages(0);
+        }
       }
     }
 
-    load();
-    return () => { active = false; };
-  }, []);
-
-  // If user arrived as a guest, attempt to restore any guest-saved signatures.
-  useEffect(() => {
-    if (!isGuest) return;
-    try {
-      const raw = sessionStorage.getItem("bp_guest_signatures");
-      if (raw) {
-        const parsed = JSON.parse(raw) as SavedSignature[];
-        if (Array.isArray(parsed)) setSavedSignatures(parsed);
-      }
-      const placedRaw = sessionStorage.getItem("bp_guest_placed");
-      if (placedRaw) {
-        const p = JSON.parse(placedRaw) as PlacedSignature;
-        if (p && typeof p.x === "number") setPlaced(p);
-      }
-    } catch (err) {
-      console.error("Failed to restore guest session:", err);
-    }
-  }, [isGuest]);
-
-  // Persist guest signatures when they change so guests can reload the page.
-  useEffect(() => {
-    if (!isGuest) return;
-    try {
-      sessionStorage.setItem("bp_guest_signatures", JSON.stringify(savedSignatures));
-    } catch (err) {
-      console.error("Failed to persist guest signatures:", err);
-    }
-  }, [isGuest, savedSignatures]);
-
-  useEffect(() => {
-    if (!isGuest) return;
-    try {
-      if (placed) sessionStorage.setItem("bp_guest_placed", JSON.stringify(placed));
-      else sessionStorage.removeItem("bp_guest_placed");
-    } catch (err) {
-      console.error("Failed to persist guest placed signature:", err);
-    }
-  }, [isGuest, placed]);
+    void loadDocument();
+    return () => {
+      active = false;
+    };
+  }, [searchParams]);
 
   const pageCount = pdfDoc ? pdfNumPages : FALLBACK_PAGE_COUNT;
   const signaturePanelOpen = activeTool === "signature";
@@ -199,7 +190,6 @@ function DocumentPageInner() {
   }
 
   function handleNewDocumentSelected(fileName: string) {
-    console.log("New document selected:", fileName);
     createNotification.document('Document ready', `${fileName} is ready for review and signing.`);
     setActiveTool(null);
   }

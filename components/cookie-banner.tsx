@@ -1,13 +1,16 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { postJson } from '@/lib/api-client'
-import type { CookieConsent } from '@/lib/cookie-preferences'
+import {
+  defaultCookieConsent,
+  getSavedCookiePreferences,
+  type CookieConsent,
+} from '@/lib/cookie-preferences'
 
 type Prefs = Omit<CookieConsent, 'essentials'> & { essentials: true }
 
@@ -16,25 +19,26 @@ export function CookieBanner({ onClose }: { onClose: () => void }) {
   const marketingId = useId()
   const externalId = useId()
   const essentialsId = useId()
-  const [prefs, setPrefs] = useState<Prefs>({
-    essentials: true,
-    marketing: true,
-    externalMedia: false,
-  })
+  const [prefs, setPrefs] = useState<Prefs>(defaultCookieConsent)
+
+  useEffect(() => {
+    const loadConsent = async () => {
+      const saved = await getSavedCookiePreferences()
+      if (saved) {
+        setPrefs({
+          essentials: true,
+          marketing: saved.marketing,
+          externalMedia: saved.externalMedia,
+        })
+      }
+    }
+
+    void loadConsent()
+  }, [])
 
   async function submit(accepted: boolean) {
-    const payload: CookieConsent = accepted
-      ? prefs
-      : { essentials: true, marketing: false, externalMedia: false }
-    const res = await postJson('/cookie-consent', payload)
-    if (res.ok) {
-      toast.success(
-        accepted ? 'Preferences acknowledged (no-op frontend)' : 'Only essentials kept (no-op frontend)',
-      )
-    } else {
-      toast.error('Could not acknowledge preferences')
-    }
-    onClose()
+    const payload: CookieConsent = accepted ? prefs : defaultCookieConsent
+    await postJson('/cookie-consent', { consent: payload })
   }
 
   return (

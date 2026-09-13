@@ -3,17 +3,8 @@
 import { X } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
 import { toast } from 'sonner'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { getBackendUrl, postJson } from '@/lib/api-client'
-
-function getGoogleSessionUser() {
-  if (typeof window === 'undefined') {
-    return { name: 'Google User', email: 'google-user@example.com' }
-  }
-  // localStorage usage removed; always return default placeholder
-  return { name: 'Google User', email: 'google-user@example.com' }
-}
+import { redirectToCloudAuth } from '@/lib/api-client'
 
 function GoogleG() {
   return (
@@ -28,36 +19,13 @@ function GoogleG() {
 
 export function GoogleOneTap({ onClose }: { onClose: () => void }) {
   const reduceMotion = useReducedMotion()
-  const router = useRouter()
 
   async function signIn() {
-    const user = getGoogleSessionUser()
-
     try {
-      const res = await fetch(getBackendUrl('/auth/google/auth-url'))
-      if (res.ok) {
-        const payload = await res.json().catch(() => null)
-        const data = payload?.data ?? payload
-        const url = data?.authUrl ?? data?.url ?? data?.redirectUrl
-
-        if (typeof url === 'string' && url.startsWith('http')) {
-          window.location.href = url
-          return
-        }
-
-        if (typeof url === 'string' && url.startsWith('/')) {
-          window.location.href = url
-          return
-        }
-      }
-
-      // No fallback or mock authentication — show an error
-      toast.error('Google authentication is currently unavailable. Please try again later.')
-      onClose()
-      return
+      await redirectToCloudAuth('google-drive')
     } catch (err) {
       console.error('Google One Tap sign-in error', err)
-      toast.error('Sign-in failed')
+      toast.error('Google authentication is currently unavailable. Please try again later.')
       onClose()
     }
   }
@@ -85,16 +53,6 @@ export function GoogleOneTap({ onClose }: { onClose: () => void }) {
         >
           <X className="size-4" />
         </Button>
-      </div>
-
-      <div className="flex items-center gap-3 px-4 pb-3">
-        <span className="flex size-10 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
-          GU
-        </span>
-        <div className="text-sm">
-          <p className="font-semibold text-foreground">{getGoogleSessionUser().name}</p>
-          <p className="text-muted-foreground">{getGoogleSessionUser().email}</p>
-        </div>
       </div>
 
       <div className="px-4 pb-4">

@@ -132,7 +132,6 @@ export function InvoicePreviewModal({
       }
 
       onUpdate?.();
-      console.log("Invoice saved")
     } catch (err) {
       console.error("Failed to save invoice:", err)
     }

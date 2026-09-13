@@ -15,7 +15,83 @@ export interface SubscriptionStatus {
   subscriptionCurrency?: string
 }
 
-const DEFAULT_TRIAL_DAYS = 0
+const DEFAULT_TRIAL_DAYS = 30
+const INVOICE_TRIAL_STORAGE_KEY = 'blueprint_invoice_trial_started_at'
+const DEFAULT_SUBSCRIPTION_AMOUNT = 2000
+
+function readFrontendTrialStart(): Date | null {
+  if (typeof window === 'undefined') return null
+
+  const stored = window.localStorage.getItem(INVOICE_TRIAL_STORAGE_KEY)
+  if (!stored) return null
+
+  const parsed = new Date(stored)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function ensureFrontendTrialStart(): Date {
+  if (typeof window === 'undefined') return new Date()
+
+  const existing = readFrontendTrialStart()
+  if (existing) return existing
+
+  const start = new Date()
+  window.localStorage.setItem(INVOICE_TRIAL_STORAGE_KEY, start.toISOString())
+  return start
+}
+
+export function resolveFrontendInvoiceTrial(data: Record<string, unknown> | null | undefined): SubscriptionStatus | null {
+  if (!data || typeof data !== 'object') return null
+
+  const userExists = Boolean((data as Record<string, unknown>).user || (data as Record<string, unknown>).isAuthenticated)
+  if (!userExists) {
+    return {
+      isAuthenticated: false,
+      isActive: false,
+      isTrialActive: false,
+      trialDaysRemaining: 0,
+    }
+  }
+
+  const sub = (data as Record<string, unknown>).subscription && typeof (data as Record<string, unknown>).subscription === 'object'
+    ? ((data as Record<string, unknown>).subscription as Record<string, unknown>)
+    : data
+
+  const explicitTrialDays = Number(sub?.trialDaysRemaining ?? data?.trialDaysRemaining ?? 0)
+  const explicitIsTrialActive = Boolean(sub?.isTrialActive ?? data?.isTrialActive ?? false)
+  const explicitIsActive = Boolean(sub?.isActive ?? data?.isActive ?? false)
+  const explicitPlan = (sub?.subscriptionPlan ?? data?.subscriptionPlan) as 'free' | 'premium' | undefined
+
+  if (explicitPlan === 'premium' || explicitIsActive || explicitIsTrialActive || explicitTrialDays > 0) {
+    return {
+      isAuthenticated: true,
+      isActive: explicitIsActive || explicitPlan === 'premium' || explicitIsTrialActive || explicitTrialDays > 0,
+      isTrialActive: explicitIsTrialActive || explicitTrialDays > 0,
+      trialDaysRemaining: explicitTrialDays > 0 ? explicitTrialDays : 0,
+      trialStartDate: sub?.trialStartDate ? new Date(String(sub.trialStartDate)) : undefined,
+      trialEndDate: sub?.trialEndDate ? new Date(String(sub.trialEndDate)) : undefined,
+      subscriptionPlan: explicitPlan === 'premium' ? 'premium' : 'free',
+      subscriptionAmount: Number(sub?.subscriptionAmount ?? data?.subscriptionAmount ?? DEFAULT_SUBSCRIPTION_AMOUNT),
+      subscriptionCurrency: (sub?.subscriptionCurrency ?? data?.subscriptionCurrency ?? 'NGN') as string,
+    }
+  }
+
+  const trialStart = ensureFrontendTrialStart()
+  const elapsedDays = Math.max(0, Math.floor((Date.now() - trialStart.getTime()) / (1000 * 60 * 60 * 24)))
+  const trialDaysRemaining = Math.max(0, DEFAULT_TRIAL_DAYS - elapsedDays)
+
+  return {
+    isAuthenticated: true,
+    isActive: trialDaysRemaining > 0,
+    isTrialActive: trialDaysRemaining > 0,
+    trialDaysRemaining,
+    trialStartDate: trialStart,
+    trialEndDate: new Date(trialStart.getTime() + DEFAULT_TRIAL_DAYS * 24 * 60 * 60 * 1000),
+    subscriptionPlan: 'free',
+    subscriptionAmount: DEFAULT_SUBSCRIPTION_AMOUNT,
+    subscriptionCurrency: 'NGN',
+  }
+}
 
 /**
  * Hook to manage subscription and trial status.
@@ -47,22 +123,13 @@ export function useSubscriptionStatus(): SubscriptionStatus {
         }
 
         const payload = await res.json().catch(() => null)
-        // backend proxy returns { ok, forwarded, data }
         const data = payload?.data ?? payload
-
-        // Try to locate subscription info in the session payload
-        const sub = data?.subscription ?? data
-
-        const subscriptionStatus: SubscriptionStatus = {
-          isAuthenticated: Boolean(data?.user || data?.isAuthenticated),
-          isActive: Boolean(sub?.isActive ?? data?.isActive ?? false),
-          isTrialActive: Boolean(sub?.isTrialActive ?? data?.isTrialActive ?? false),
-          trialDaysRemaining: Number(sub?.trialDaysRemaining ?? data?.trialDaysRemaining ?? DEFAULT_TRIAL_DAYS),
-          trialStartDate: sub?.trialStartDate ? new Date(sub.trialStartDate) : undefined,
-          trialEndDate: sub?.trialEndDate ? new Date(sub.trialEndDate) : undefined,
-          subscriptionPlan: sub?.subscriptionPlan ?? data?.subscriptionPlan,
-          subscriptionAmount: sub?.subscriptionAmount ?? data?.subscriptionAmount,
-          subscriptionCurrency: sub?.subscriptionCurrency ?? data?.subscriptionCurrency,
+        const frontendSubscription = resolveFrontendInvoiceTrial(data)
+        const subscriptionStatus: SubscriptionStatus = frontendSubscription ?? {
+          isAuthenticated: false,
+          isActive: false,
+          isTrialActive: false,
+          trialDaysRemaining: 0,
         }
 
         if (!cancelled) setStatus(subscriptionStatus)
@@ -105,7 +172,7 @@ export function isFeatureAvailable(
     return true
   }
 
-  // Invoicing requires active trial or subscription
+  // Invoicing includes a 30-day free trial for new sign-ins before the ₦2,000 Paystack plan kicks in.
   if (feature === 'invoicing') {
     return subscriptionStatus.isActive && (subscriptionStatus.isTrialActive || subscriptionStatus.subscriptionPlan === 'premium')
   }

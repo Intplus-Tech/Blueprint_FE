@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { HardDrive, Cloud, Info, Feather, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CloudStorageSelector } from '@/components/cloud-storage-selector'
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,31 +17,15 @@ import { createNotification } from "@/lib/notifications";
 
 const SOURCES = [
   { id: "device", label: "My Device", icon: HardDrive, color: "text-gray-500" },
-  { id: "google", label: "Google Drive", icon: Cloud, color: "text-green-500" },
-  { id: "onedrive", label: "Onedrive", icon: Cloud, color: "text-blue-500" },
-  { id: "dropbox", label: "Dropbox", icon: Cloud, color: "text-sky-500" },
 ];
 
 export function NewDocumentPanel({ onSelected }: { onSelected: (fileName: string) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [showCloudSelector, setShowCloudSelector] = useState<null | 'gdrive' | 'onedrive' | 'dropbox'>(null);
 
   function handleSourceClick(id: string) {
     if (id === "device") {
       inputRef.current?.click();
-      return;
     }
-    // Open the cloud storage selector for provider flows
-    if (id === 'google') return setShowCloudSelector('gdrive');
-    if (id === 'onedrive') return setShowCloudSelector('onedrive');
-    if (id === 'dropbox') return setShowCloudSelector('dropbox');
-    // Unknown source: do nothing (removed fallback stub)
-  }
-
-  function handleCloudFileSelected(response: any) {
-    setShowCloudSelector(null);
-    const name = response?.data?.fileName ?? response?.fileName ?? response?.data?.name ?? response?.name ?? response?.data?.url?.split('/').pop();
-    if (name) onSelected(String(name));
   }
 
   return (
@@ -66,11 +49,6 @@ export function NewDocumentPanel({ onSelected }: { onSelected: (fileName: string
           if (e.target.files?.[0]) onSelected(e.target.files[0].name);
         }}
       />
-      {showCloudSelector && (
-        <div className="p-3">
-          <CloudStorageSelector onFileSelected={handleCloudFileSelected} onClose={() => setShowCloudSelector(null)} />
-        </div>
-      )}
     </div>
   );
 }

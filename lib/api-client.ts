@@ -3,7 +3,12 @@
 import axios from 'axios'
 
 export function getBackendBaseUrl() {
-  return (process.env.NEXT_PUBLIC_BACKEND_API_URL || process.env.BACKEND_API_URL || 'http://localhost:5000/api/v1').replace(/\/$/, '')
+  const configured = process.env.NEXT_PUBLIC_BACKEND_API_URL
+    || process.env.NEXT_PUBLIC_API_URL
+    || process.env.BACKEND_API_URL
+    || 'http://localhost:5000/api/v1'
+
+  return configured.replace(/\/$/, '')
 }
 
 export function getBackendUrl(path: string) {
@@ -17,7 +22,6 @@ export function getBackendUrl(path: string) {
   const apiRootBase = baseUrl.replace(/\/api\/v1\/?$/, '/api')
   const rootBase = baseUrl.replace(/\/api\/v1\/?$/, '')
 
-  // Backend-specific routes that do not live under /api/v1.
   if (normalizedPath === '/session') return `${apiRootBase}/session`
   if (normalizedPath === '/cookie-consent') return `${rootBase}/cookie-consent`
   if (normalizedPath === '/health') return `${rootBase}/health`
@@ -31,6 +35,19 @@ export function getBackendUrl(path: string) {
   }
 
   return `${apiV1Base}${normalizedPath}`
+}
+
+function extractBackendResponseData<T>(data: T | { data?: T; authUrl?: string; url?: string } | null | undefined): T | null {
+  if (!data || typeof data !== 'object') {
+    return (data as T | null) ?? null
+  }
+
+  const record = data as Record<string, unknown>
+  if ('data' in record && record.data !== undefined) {
+    return record.data as T
+  }
+
+  return data as T
 }
 
 // Axios instance with default configuration
@@ -51,6 +68,17 @@ axiosInstance.interceptors.response.use(
     return Promise.reject(error)
   },
 )
+
+/** GETs JSON from the backend API and returns the parsed response. */
+export async function getJson<T = unknown>(url: string): Promise<{ ok: boolean; status: number; data: T | null }> {
+  const res = await fetch(getBackendUrl(url), {
+    method: 'GET',
+    headers: { accept: 'application/json' },
+    credentials: 'include',
+  })
+  const data = (await res.json().catch(() => null)) as T | null
+  return { ok: res.ok, status: res.status, data }
+}
 
 /** POSTs JSON to the backend API and returns the parsed response. */
 export async function postJson<T>(
@@ -81,9 +109,11 @@ export async function uploadFile(file: File, metadata?: Record<string, any>) {
     }
 
     const response = await axiosInstance.post('/uploads', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      // Let the browser set the multipart boundary header automatically
+      withCredentials: true,
     })
-    return response.data
+
+    return extractBackendResponseData(response.data)
   } catch (error) {
     console.error('Failed to upload file:', error)
     throw error
@@ -104,8 +134,8 @@ export async function deleteUpload(publicId: string) {
 /** Get Google Drive auth URL */
 export async function getGoogleAuthUrl() {
   try {
-    const response = await axiosInstance.get('/auth/google/auth-url')
-    return response.data
+    const response = await axiosInstance.get('/auth/google/auth-url', { withCredentials: true })
+    return extractBackendResponseData(response.data)
   } catch (error) {
     console.error('Failed to get Google auth URL:', error)
     throw error
@@ -115,8 +145,8 @@ export async function getGoogleAuthUrl() {
 /** Get OneDrive auth URL */
 export async function getOneDriveAuthUrl() {
   try {
-    const response = await axiosInstance.get('/auth/onedrive/auth-url')
-    return response.data
+    const response = await axiosInstance.get('/auth/onedrive/auth-url', { withCredentials: true })
+    return extractBackendResponseData(response.data)
   } catch (error) {
     console.error('Failed to get OneDrive auth URL:', error)
     throw error
@@ -126,12 +156,41 @@ export async function getOneDriveAuthUrl() {
 /** Get Dropbox auth URL */
 export async function getDropboxAuthUrl() {
   try {
-    const response = await axiosInstance.get('/auth/dropbox/auth-url')
-    return response.data
+    const response = await axiosInstance.get('/auth/dropbox/auth-url', { withCredentials: true })
+    return extractBackendResponseData(response.data)
   } catch (error) {
     console.error('Failed to get Dropbox auth URL:', error)
     throw error
   }
+}
+
+export async function redirectToCloudAuth(provider: 'google-drive' | 'onedrive' | 'dropbox') {
+  const resolvers = {
+    'google-drive': getGoogleAuthUrl,
+    onedrive: getOneDriveAuthUrl,
+    dropbox: getDropboxAuthUrl,
+  }
+
+  const resolver = resolvers[provider]
+  if (!resolver) {
+    throw new Error(`Unsupported cloud provider: ${provider}`)
+  }
+
+  const data = await resolver()
+  const authUrl = typeof data === 'string'
+    ? data
+    : (typeof (data as Record<string, unknown>)?.authUrl === 'string'
+      ? (data as Record<string, unknown>).authUrl as string
+      : (typeof (data as Record<string, unknown>)?.url === 'string'
+        ? (data as Record<string, unknown>).url as string
+        : null))
+
+  if (!authUrl) {
+    throw new Error(`No auth URL returned for ${provider}`)
+  }
+
+  window.location.href = authUrl
+  return authUrl
 }
 
 /** Handle Google OAuth callback */
@@ -147,19 +206,6 @@ export async function handleGoogleCallback(code: string) {
   }
 }
 
-/** Persistence to localStorage has been removed for privacy reasons. */
-export function persistAuthSession(_payload: any) {
-  if (typeof window === 'undefined') return
-  // intentionally no-op: storage persistence disabled
-  console.warn('persistAuthSession: localStorage persistence disabled')
-}
-
-export function clearAuthSession() {
-  if (typeof window === 'undefined') return
-  // intentionally no-op: storage persistence disabled
-  console.warn('clearAuthSession: localStorage persistence disabled')
-}
-
 /** Register user */
 export async function registerUser(data: {
   fullName: string
@@ -173,19 +219,6 @@ export async function registerUser(data: {
     return response.data
   } catch (error) {
     console.error('Registration failed:', error)
-    throw error
-  }
-}
-
-/** Verify a user email using the token emailed to them. */
-export async function verifyEmail(token: string) {
-  try {
-    const response = await axiosInstance.get('/auth/verify-email', {
-      params: { token },
-    })
-    return response.data
-  } catch (error) {
-    console.error('Email verification failed:', error)
     throw error
   }
 }

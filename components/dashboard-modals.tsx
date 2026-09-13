@@ -272,7 +272,11 @@ export function AddSignerModal({
 }
 
 /* Export hook for dashboard usage */
-export function useDashboardModals(docs: any[], handleAddSignerFromModal: (docId: string, signer: any) => void) {
+export function useDashboardModals(
+  docs: any[],
+  handleAddSignerFromModal: (docId: string, signer: any) => void,
+  handleResendSigner?: (docId: string, signerId: string) => void,
+) {
   const [detailsDocId, setDetailsDocId] = useState<string | null>(null);
   const [addSignerDocId, setAddSignerDocId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -302,7 +306,11 @@ export function useDashboardModals(docs: any[], handleAddSignerFromModal: (docId
               setShowAddForm(false);
             }}
             onAddSigner={(signer) => handleAddSignerFromModal(detailsDocId, signer)}
-            onResend={(id) => console.log("Resend to signer:", id)}
+            onResend={(id) => {
+              if (handleResendSigner && detailsDocId) {
+                handleResendSigner(detailsDocId, id);
+              }
+            }}
           />
         );
       })()}

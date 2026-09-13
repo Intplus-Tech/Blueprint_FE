@@ -151,10 +151,32 @@ export function useTrialGate(feature: TrialGateProps['feature']) {
       const data = payload?.data ?? payload
       const sub = data?.subscription ?? data
 
+      const explicitTrialDays = Number(sub?.trialDaysRemaining ?? data?.trialDaysRemaining ?? 0)
+      const explicitIsTrialActive = Boolean(sub?.isTrialActive ?? data?.isTrialActive ?? false)
+      const explicitIsActive = Boolean(sub?.isActive ?? data?.isActive ?? false)
+      const explicitPlan = (sub?.subscriptionPlan ?? data?.subscriptionPlan) as 'free' | 'premium' | undefined
+
+      const frontendTrialDays = (() => {
+        if (!data || !data.user && !data.isAuthenticated) return 0
+        if (explicitPlan === 'premium' || explicitIsActive || explicitIsTrialActive || explicitTrialDays > 0) {
+          return explicitTrialDays > 0 ? explicitTrialDays : 0
+        }
+
+        if (typeof window === 'undefined') return 0
+
+        const storedAt = window.localStorage.getItem('blueprint_invoice_trial_started_at')
+        const start = storedAt ? new Date(storedAt) : new Date()
+        if (!storedAt) window.localStorage.setItem('blueprint_invoice_trial_started_at', start.toISOString())
+
+        const elapsedDays = Math.max(0, Math.floor((Date.now() - start.getTime()) / (1000 * 60 * 60 * 24)))
+        return Math.max(0, 30 - elapsedDays)
+      })()
+
+      const hasTrialAccess = frontendTrialDays > 0
       setIsAuthenticated(Boolean(data?.user || data?.isAuthenticated))
-      setIsSubscribed(Boolean(sub?.isActive || sub?.subscriptionPlan === 'premium'))
-      setTrialDaysRemaining(Number(sub?.trialDaysRemaining ?? data?.trialDaysRemaining ?? 0))
-      setSubscriptionAmount(sub?.subscriptionAmount ?? data?.subscriptionAmount ?? null)
+      setIsSubscribed(Boolean(sub?.isActive || sub?.subscriptionPlan === 'premium' || hasTrialAccess))
+      setTrialDaysRemaining(frontendTrialDays)
+      setSubscriptionAmount(sub?.subscriptionAmount ?? data?.subscriptionAmount ?? 2000)
     } catch (err) {
       console.error('Failed to fetch session info for trial gate:', err)
     }
@@ -169,7 +191,7 @@ export function useTrialGate(feature: TrialGateProps['feature']) {
       window.location.href = `/billing?${q.toString()}`
     } catch (err) {
       console.error('Failed to open billing page:', err)
-      window.location.href = '/authenticated-dashboard'
+      window.location.href = '/dashboard'
     }
   }
 
@@ -185,9 +207,29 @@ export function useTrialGate(feature: TrialGateProps['feature']) {
       try {
         const session = await getSession()
         const sub = (session && (session as any).subscription) ?? session
-        const active = Boolean(sub && (sub.isActive || sub.subscriptionPlan === 'premium'))
+        const explicitTrialDays = Number(sub?.trialDaysRemaining ?? session?.trialDaysRemaining ?? 0)
+        const explicitIsTrialActive = Boolean(sub?.isTrialActive ?? session?.isTrialActive ?? false)
+        const explicitIsActive = Boolean(sub?.isActive ?? session?.isActive ?? false)
+        const explicitPlan = (sub?.subscriptionPlan ?? session?.subscriptionPlan) as 'free' | 'premium' | undefined
+
+        const frontendTrialDays = (() => {
+          if (!session?.user && !session?.isAuthenticated) return 0
+          if (explicitPlan === 'premium' || explicitIsActive || explicitIsTrialActive || explicitTrialDays > 0) {
+            return explicitTrialDays > 0 ? explicitTrialDays : 0
+          }
+
+          const storedAt = window.localStorage.getItem('blueprint_invoice_trial_started_at')
+          const start = storedAt ? new Date(storedAt) : new Date()
+          if (!storedAt) window.localStorage.setItem('blueprint_invoice_trial_started_at', start.toISOString())
+
+          const elapsedDays = Math.max(0, Math.floor((Date.now() - start.getTime()) / (1000 * 60 * 60 * 24)))
+          return Math.max(0, 30 - elapsedDays)
+        })()
+
+        const active = Boolean(sub && (sub.isActive || sub.subscriptionPlan === 'premium')) || frontendTrialDays > 0
         if (active) {
           setIsSubscribed(true)
+          setTrialDaysRemaining(frontendTrialDays)
           setIsOpen(false)
           return
         }

@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
-import { getBackendUrl, loginUser, persistAuthSession } from "@/lib/api-client";
+import { getBackendUrl, loginUser, redirectToCloudAuth } from "@/lib/api-client";
 
 export default function LoginPage() {
   return (
@@ -56,10 +56,7 @@ function LoginPageContent() {
     setIsSubmitting(true);
     try {
       const payload = { email: email.trim(), password };
-      const response = await loginUser(payload);
-
-      const responseData = response?.data ?? response;
-      persistAuthSession(responseData);
+      await loginUser(payload);
 
       router.push("/dashboard");
     } catch (err: any) {
@@ -90,20 +87,7 @@ function LoginPageContent() {
 
   async function handleGoogleLogin() {
     try {
-      const res = await fetch(getBackendUrl('/auth/google/auth-url'))
-      if (!res.ok) {
-        throw new Error('Failed to get Google auth URL')
-      }
-
-      const payload = await res.json().catch(() => null)
-      const url = payload?.data?.authUrl ?? payload?.data?.url ?? payload?.url ?? payload?.authUrl
-
-      if (typeof url === 'string' && url.trim()) {
-        window.location.href = url
-        return
-      }
-
-      setError('Google authentication is currently unavailable. Please try again later.')
+      await redirectToCloudAuth('google-drive')
     } catch (error) {
       console.error('Google login failed:', error)
       setError('Google authentication failed. Please try again later.')
@@ -191,20 +175,6 @@ function LoginPageContent() {
           Sign Up
         </Link>
       </p>
-
-      <div className="mt-3">
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-9 w-full border border-gray-200 bg-white/40 text-gray-800 hover:bg-white/50"
-          onClick={() => {
-            // Route to the public landing so guests can upload and preview immediately
-            window.location.href = "/";
-          }}
-        >
-          Continue as Guest
-        </Button>
-      </div>
 
       <p className="mt-6 text-center text-xs text-gray-400">
         Powered By: <span className="font-medium text-gray-600">Al Torney</span>

@@ -7,29 +7,52 @@ import { invoiceTotal, type Invoice } from "@/lib/invoice-types";
 import { InvoicePreviewModal } from "@/components/invoice-preview-modal";
 import { InvoiceEditorModal } from "@/components/invoice-editor-modal";
 import { TemplateGallery, TemplatePreviewModal, type Template } from "@/components/invoice-templates";
-import { saveInvoice } from "@/lib/blueprint-api";
+import { listInvoices, saveInvoice } from "@/lib/blueprint-api";
 import { TrialGateModal, useTrialGate } from "@/components/trial-gate-modal";
 
-const INITIAL_INVOICES: Invoice[] = [
-  {
-    id: "1", invoiceNumber: "000123", billTo: "Address | Contact Info", contactName: "Client Name",
-    email: "", phone: "", issueDate: "December 2, 2023", dueDate: "December 20, 2023",
-    items: [{ id: "i1", description: "Invoice item 1", qty: 1, rate: 4000 }],
-    tax: 0, discount: 0, terms: "Have a great day.", status: "Draft",
-  },
-  {
-    id: "2", invoiceNumber: "23455", billTo: "Company Name LLC", contactName: "Company Name LLC",
-    email: "", phone: "", issueDate: "25 Jan 2025", dueDate: "25 Jan 2025",
-    items: [{ id: "i2", description: "Retainer", qty: 1, rate: 4000 }],
-    tax: 0, discount: 0, terms: "", status: "Sent",
-  },
-  {
-    id: "3", invoiceNumber: "23456", billTo: "Company Name LLC", contactName: "Company Name LLC",
-    email: "", phone: "", issueDate: "25 Jun 2025", dueDate: "25 Jun 2025",
-    items: [{ id: "i3", description: "Retainer", qty: 1, rate: 4000 }],
-    tax: 0, discount: 0, terms: "", status: "Sent",
-  },
-];
+function normalizeInvoiceRecord(record: Record<string, unknown>): Invoice | null {
+  if (!record || typeof record !== 'object') return null;
+
+  const id = typeof record.id === 'string' ? record.id : (typeof record._id === 'string' ? record._id : crypto.randomUUID());
+  const invoiceNumber = typeof record.invoiceNumber === 'string' ? record.invoiceNumber : (typeof record.number === 'string' ? record.number : id.slice(0, 6).toUpperCase());
+  const billTo = typeof record.billTo === 'string' ? record.billTo : '';
+  const contactName = typeof record.contactName === 'string' ? record.contactName : (typeof record.customerName === 'string' ? record.customerName : billTo);
+  const email = typeof record.email === 'string' ? record.email : '';
+  const phone = typeof record.phone === 'string' ? record.phone : '';
+  const issueDate = typeof record.issueDate === 'string' ? record.issueDate : '';
+  const dueDate = typeof record.dueDate === 'string' ? record.dueDate : issueDate;
+  const terms = typeof record.terms === 'string' ? record.terms : '';
+  const status = (typeof record.status === 'string' ? record.status : 'Draft') as Invoice['status'];
+  const rawItems = Array.isArray(record.items) ? record.items : [];
+  const items: Invoice['items'] = rawItems.map((entry, index) => {
+    const item = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
+    return {
+      id: typeof item.id === 'string' ? item.id : `item-${index}`,
+      description: typeof item.description === 'string' ? item.description : 'Service',
+      qty: typeof item.qty === 'number' ? item.qty : Number(item.qty ?? 1),
+      rate: typeof item.rate === 'number' ? item.rate : Number(item.rate ?? 0),
+    };
+  });
+
+  const tax = typeof record.tax === 'number' ? record.tax : Number(record.tax ?? 0);
+  const discount = typeof record.discount === 'number' ? record.discount : Number(record.discount ?? 0);
+
+  return {
+    id,
+    invoiceNumber,
+    billTo,
+    contactName,
+    email,
+    phone,
+    issueDate,
+    dueDate,
+    items: items.length > 0 ? items : [{ id: 'default-item', description: 'Service', qty: 1, rate: 0 }],
+    tax,
+    discount,
+    terms,
+    status: status === 'Draft' || status === 'Sent' || status === 'Paid' ? status : 'Draft',
+  };
+}
 
 type SubTab = "my" | "templates" | "editor";
 type EditorState = { mode: "create" | "update"; invoice?: Invoice; template?: Template } | null;
@@ -187,12 +210,37 @@ function EditorsPanel() {
 
 export function InvoicesPanel({ onBreadcrumbChange }: { onBreadcrumbChange?: (text: string) => void }) {
   const gate = useTrialGate('invoicing')
-  const [invoices, setInvoices] = useState<Invoice[]>(INITIAL_INVOICES);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [subTab, setSubTab] = useState<SubTab>("my");
   const [search, setSearch] = useState("");
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState>(null);
   const [templatePreview, setTemplatePreview] = useState<Template | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadInvoices() {
+      try {
+        const result = await listInvoices();
+        if (!result.ok || !Array.isArray(result.data) || cancelled) return;
+
+        const nextInvoices = result.data
+          .map((entry) => normalizeInvoiceRecord(entry as Record<string, unknown>))
+          .filter((invoice): invoice is Invoice => invoice !== null);
+
+        setInvoices(nextInvoices);
+      } catch (error) {
+        console.error('Failed to load invoices from backend:', error);
+        setInvoices([]);
+      }
+    }
+
+    void loadInvoices();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (editor?.mode === "update") {
@@ -202,8 +250,6 @@ export function InvoicesPanel({ onBreadcrumbChange }: { onBreadcrumbChange?: (te
     } else if (editor?.mode === "create") {
       onBreadcrumbChange?.("Invoices > Create Invoice");
     } else if (previewId) {
-      // Fixed: this used to incorrectly reuse "Invoices > Create Invoice".
-      // Image 2 shows the preview modal breadcrumb reading just "Preview".
       onBreadcrumbChange?.("Preview");
     } else if (templatePreview) {
       onBreadcrumbChange?.("Invoices > All Templates");

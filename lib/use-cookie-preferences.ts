@@ -23,29 +23,43 @@ export interface UseCookiePreferencesReturn {
 
 /**
  * Hook to manage cookie preferences in the current session.
- * Consent is sent to the backend and is not persisted in the browser.
+ * Consent is loaded from the backend and saved there as the source of truth.
  */
 export function useCookiePreferences(): UseCookiePreferencesReturn {
   const [preferences, setPreferences] = useState<CookieConsent | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
 
-  // Load preferences on mount from the backend-only consent state.
   useEffect(() => {
-    const saved = getSavedCookiePreferences()
-    if (saved) {
-      setPreferences(saved)
+    const loadPreferences = async () => {
+      try {
+        const saved = await getSavedCookiePreferences()
+        if (saved) {
+          setPreferences(saved)
+        }
+      } catch (error) {
+        console.error('Failed to fetch cookie preferences:', error)
+      } finally {
+        setIsLoaded(true)
+      }
     }
-    setIsLoaded(true)
+
+    void loadPreferences()
   }, [])
 
   const save = (prefs: CookieConsent) => {
-    saveCookiePreferences(prefs)
-    setPreferences(prefs)
+    void saveCookiePreferences(prefs).then((ok) => {
+      if (ok) {
+        setPreferences(prefs)
+      }
+    })
   }
 
   const clear = () => {
-    clearCookiePreferences()
-    setPreferences(null)
+    void clearCookiePreferences().then((ok) => {
+      if (ok) {
+        setPreferences(null)
+      }
+    })
   }
 
   const isSaved = (prefs: CookieConsent) => {
@@ -59,7 +73,7 @@ export function useCookiePreferences(): UseCookiePreferencesReturn {
 
   const isAllowed = (type: keyof CookieConsent) => {
     if (!preferences) return false
-    return isCookieTypeAllowed(type)
+    return isCookieTypeAllowed(preferences, type)
   }
 
   const isExpired = () => areCookiePreferencesExpired()

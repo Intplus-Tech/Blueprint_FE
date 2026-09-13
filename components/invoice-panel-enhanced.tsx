@@ -139,11 +139,11 @@ export function InvoicePanelHeader({ onNewInvoice }: InvoicePanelHeaderProps) {
 
                 const reference = getPaystackReference(res)
                 if (reference) {
-                  window.location.href = `/authenticated-dashboard?reference=${encodeURIComponent(reference)}`
+                  window.location.href = `/dashboard?reference=${encodeURIComponent(reference)}`
                   return
                 }
 
-                window.location.href = '/authenticated-dashboard'
+                window.location.href = '/dashboard'
               }}
               variant="outline"
               className="px-3"

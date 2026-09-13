@@ -11,19 +11,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { postJson } from '@/lib/api-client'
-import { storePdfFile } from '@/lib/pdf'
+import { postJson, redirectToCloudAuth, uploadFile } from '@/lib/api-client'
+import { createDocument } from '@/lib/blueprint-api'
 import { useRouter } from 'next/navigation'
-import { CloudStorageSelector } from '@/components/cloud-storage-selector'
 
 type UploadPayload = {
   fileName: string
   size?: number
   type?: string
-  source: 'device' | 'gdrive' | 'onedrive' | 'dropbox'
+  source: 'device'
 }
 
-type SourceId = UploadPayload['source']
+type SourceId = 'device' | 'gdrive' | 'onedrive' | 'dropbox'
 
 type Source = {
   id: SourceId
@@ -46,7 +45,7 @@ const SOURCES: Source[] = [
   },
   {
     id: 'onedrive',
-    label: 'Onedrive',
+    label: 'OneDrive',
     icon: (
       <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true" fill="#0364b8">
         <path d="M10.5 6a5.5 5.5 0 0 1 5.1 3.5 4.5 4.5 0 0 1 .9 8.9H6a4.5 4.5 0 0 1-1-8.9A5.5 5.5 0 0 1 10.5 6Z" />
@@ -88,16 +87,41 @@ export function UploadDropzone() {
   const [fileName, setFileName] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  async function handleFile(file: File, source: SourceId) {
+  async function handleFile(file: File) {
     setFileName(file.name)
 
+    let uploadedDocumentId: string | null = null
+
     try {
-      // Store the file locally before routing so the document viewer sees the PDF
-      // data immediately on the next page instead of racing with navigation.
-      await storePdfFile(file)
+      const uploaded = await uploadFile(file, {
+        fileName: file.name,
+        size: file.size,
+        type: file.type,
+        source: 'device',
+      })
+
+      const payload = uploaded && typeof uploaded === 'object' ? uploaded as Record<string, unknown> : {}
+      const candidate = payload.id ?? payload.documentId ?? payload._id ?? payload.data
+      const resolvedId = typeof candidate === 'string' ? candidate : (typeof (candidate as Record<string, unknown>)?.id === 'string' ? (candidate as Record<string, unknown>).id as string : null)
+      uploadedDocumentId = resolvedId
+
+      const docCreate = await createDocument({
+        name: file.name,
+        fileName: file.name,
+        status: 'Pending',
+        source: 'device',
+        uploadData: payload,
+      })
+
+      if (docCreate.ok && docCreate.data) {
+        const backendId = docCreate.data.id ?? docCreate.data.documentId ?? docCreate.data._id
+        if (typeof backendId === 'string' && backendId.trim()) {
+          uploadedDocumentId = backendId
+        }
+      }
     } catch (error) {
-      console.error('Failed to store PDF for preview:', error)
-      toast.error('Unable to preview this document', { description: 'Please try uploading it again.' })
+      console.error('Failed to upload PDF to backend:', error)
+      toast.error('Unable to upload this document', { description: 'Please try again.' })
       return
     }
 
@@ -105,38 +129,37 @@ export function UploadDropzone() {
       fileName: file.name,
       size: file.size,
       type: file.type,
-      source,
+      source: 'device',
     })
-    router.push('/document?from=guest')
+
+    const query = uploadedDocumentId ? `?id=${encodeURIComponent(uploadedDocumentId)}` : `?name=${encodeURIComponent(file.name)}`
+    router.push(`/document${query}`)
   }
 
-  const [showCloudSelector, setShowCloudSelector] = useState<null | SourceId>(null)
-
-  function handleSource(source: Source) {
+  async function handleSource(source: Source) {
     if (source.id === 'device') {
       inputRef.current?.click()
       return
     }
 
-    // Open the cloud storage selector for provider flows (real connector)
-    setFileName(`Connecting to ${source.label}...`)
-    setShowCloudSelector(source.id)
-  }
-
-  function handleCloudFileSelected(response: any) {
-    setShowCloudSelector(null)
-    const name = response?.data?.fileName ?? response?.fileName ?? response?.data?.name ?? response?.name ?? response?.data?.url?.split('/').pop()
-    if (name) setFileName(String(name))
-
-    // Optionally register the remote file with backend for tracking
-    void registerUpload({ fileName: String(name ?? `${response?.data?.url ?? 'file'}`), source: (response?.source as SourceId) ?? 'gdrive' })
+    try {
+      toast.loading('Connecting to cloud storage...', { id: 'cloud-auth' })
+      await redirectToCloudAuth(
+        source.id === 'gdrive' ? 'google-drive' : source.id === 'onedrive' ? 'onedrive' : 'dropbox',
+      )
+    } catch (error) {
+      console.error(`Failed to connect ${source.label}:`, error)
+      toast.error(`Unable to connect ${source.label}`, { description: 'Please try again.' })
+    } finally {
+      toast.dismiss('cloud-auth')
+    }
   }
 
   function onDrop(e: React.DragEvent) {
     e.preventDefault()
     setDragging(false)
     const file = e.dataTransfer.files?.[0]
-    if (file) handleFile(file, 'device')
+    if (file) handleFile(file)
   }
 
   return (
@@ -161,7 +184,7 @@ export function UploadDropzone() {
         tabIndex={-1}
         onChange={(e) => {
           const file = e.target.files?.[0]
-          if (file) handleFile(file, 'device')
+          if (file) handleFile(file)
         }}
       />
 
@@ -213,11 +236,6 @@ export function UploadDropzone() {
         <p className="text-sm text-white/90">Drag your files here</p>
       )}
 
-      {showCloudSelector && (
-        <div className="w-full mt-4">
-          <CloudStorageSelector onFileSelected={handleCloudFileSelected} onClose={() => setShowCloudSelector(null)} />
-        </div>
-      )}
     </motion.div>
   )
 }

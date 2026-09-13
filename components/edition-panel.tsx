@@ -28,6 +28,53 @@ const DEFAULT_TERMS =
  * default signature, currency). Uploads are backed by the backend and the
  * panel reflects only real uploaded asset URLs.
  */
+function resolveUploadedImageUrl(value: unknown): string | null {
+  const visited = new Set<object>();
+
+  function walk(node: unknown): string | null {
+    if (typeof node === 'string') {
+      const trimmed = node.trim();
+      if (!trimmed) return null;
+      if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('/')) return trimmed;
+      return null;
+    }
+
+    if (!node || typeof node !== 'object') return null;
+    if (visited.has(node as object)) return null;
+    visited.add(node as object);
+
+    const record = node as Record<string, unknown>;
+    const candidates = [
+      record.url,
+      record.fileUrl,
+      record.file_url,
+      record.secure_url,
+      record.publicUrl,
+      record.imageUrl,
+      record.image_url,
+      record.asset,
+      record.data,
+      record.result,
+      record.payload,
+      record.document,
+    ];
+
+    for (const candidate of candidates) {
+      const resolved = walk(candidate);
+      if (resolved) return resolved;
+    }
+
+    for (const nested of Object.values(record)) {
+      const resolved = walk(nested);
+      if (resolved) return resolved;
+    }
+
+    return null;
+  }
+
+  return walk(value);
+}
+
 export function EditionPanel() {
   const [isotype, setIsotype] = useState<string | null>(null);
   const [logotype, setLogotype] = useState<string | null>(null);
@@ -56,20 +103,6 @@ export function EditionPanel() {
   }
 
   function handleSave() {
-    console.log("Saving edition panel settings", {
-      isotype,
-      logotype,
-      signature,
-      companyName,
-      address,
-      taxNumber,
-      web,
-      email,
-      phone,
-      terms,
-      currencySymbol,
-      currencyCode,
-    });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -96,26 +129,20 @@ export function EditionPanel() {
             ref={isotypeInput}
             type="file"
             accept="image/*"
-            className="hidden"
+            className="sr-only"
             onChange={async (e) => {
               const file = e.target.files?.[0];
               if (!file) return;
 
               try {
                 const result = await uploadFile(file, { type: "brand" });
-                const uploadedUrl =
-                  (result as any)?.url ??
-                  (result as any)?.secure_url ??
-                  (result as any)?.fileUrl ??
-                  (result as any)?.data?.url ??
-                  (result as any)?.data?.secure_url ??
-                  (result as any)?.data?.fileUrl ??
-                  (typeof result === "string" ? result : null);
-
+                const uploadedUrl = resolveUploadedImageUrl(result);
                 setIsotype(uploadedUrl ?? null);
+                e.target.value = "";
               } catch (error) {
                 console.error("Failed to upload isotype:", error);
                 setIsotype(null);
+                e.target.value = "";
               }
             }}
           />
@@ -135,26 +162,20 @@ export function EditionPanel() {
             ref={logotypeInput}
             type="file"
             accept="image/*"
-            className="hidden"
+            className="sr-only"
             onChange={async (e) => {
               const file = e.target.files?.[0];
               if (!file) return;
 
               try {
                 const result = await uploadFile(file, { type: "brand" });
-                const uploadedUrl =
-                  (result as any)?.url ??
-                  (result as any)?.secure_url ??
-                  (result as any)?.fileUrl ??
-                  (result as any)?.data?.url ??
-                  (result as any)?.data?.secure_url ??
-                  (result as any)?.data?.fileUrl ??
-                  (typeof result === "string" ? result : null);
-
+                const uploadedUrl = resolveUploadedImageUrl(result);
                 setLogotype(uploadedUrl ?? null);
+                e.target.value = "";
               } catch (error) {
                 console.error("Failed to upload logotype:", error);
                 setLogotype(null);
+                e.target.value = "";
               }
             }}
           />
@@ -182,26 +203,20 @@ export function EditionPanel() {
             ref={signatureInput}
             type="file"
             accept="image/*"
-            className="hidden"
+            className="sr-only"
             onChange={async (e) => {
               const file = e.target.files?.[0];
               if (!file) return;
 
               try {
-                const result = await uploadFile(file, { type: "brand" });
-                const uploadedUrl =
-                  (result as any)?.url ??
-                  (result as any)?.secure_url ??
-                  (result as any)?.fileUrl ??
-                  (result as any)?.data?.url ??
-                  (result as any)?.data?.secure_url ??
-                  (result as any)?.data?.fileUrl ??
-                  (typeof result === "string" ? result : null);
-
+                const result = await uploadFile(file, { type: "signature" });
+                const uploadedUrl = resolveUploadedImageUrl(result);
                 setSignature(uploadedUrl ?? null);
+                e.target.value = "";
               } catch (error) {
                 console.error("Failed to upload signature:", error);
                 setSignature(null);
+                e.target.value = "";
               }
             }}
           />
